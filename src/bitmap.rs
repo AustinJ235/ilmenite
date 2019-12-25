@@ -1,11 +1,13 @@
-pub use super::font::{BstFont,BstFontWeight};
-pub use super::glyph::{BstGlyph,BstGlyphRaw,BstGlyphPos,BstGlyphGeo,BstGlyphPoint};
-pub use super::error::{BstTextError,BstTextErrorSrc,BstTextErrorTy};
-pub use super::script::{BstTextScript,BstTextLang};
-pub use super::bitmap_cache::BstGlyphBitmapCache;
-use ordered_float::OrderedFloat;
-use std::sync::Arc;
+use crate::ImtError;
+use crate::ImtParsedGlyph;
+use crate::ImtRaster;
+use crate::ImtParser;
+use crate::ImtGeometry;
+use crate::ImtPoint;
+use crate::ImtShaderVert;
 use crate::shaders::glyph_base_fs;
+
+use std::sync::Arc;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::descriptor::PipelineLayoutAbstract;
 use vulkano::framebuffer::Framebuffer;
@@ -22,30 +24,34 @@ use vulkano::command_buffer::CommandBuffer;
 use vulkano::sync::GpuFuture;
 use vulkano::pipeline::input_assembly::PrimitiveTopology;
 
-#[derive(Default, Copy, Clone)]
-pub(super) struct ShaderVert {
-	pub position: [f32; 2],
-}
-
-vulkano::impl_vertex!(ShaderVert, position);
-
-#[derive(Clone,Debug,PartialEq)]
-pub struct BstGlyphBitmap {
-	pub glyph_raw: Arc<BstGlyphRaw>,
+#[derive(Clone)]
+pub struct ImtGlyphBitmap {
+	parsed: Arc<ImtParsedGlyph>,
 	pub width: u32,
 	pub height: u32,
 	pub bearing_x: f32,
 	pub bearing_y: f32,
 	pub data: Vec<Vec<f32>>,
-	pub lines: Vec<(BstGlyphPoint, BstGlyphPoint)>,
+	lines: Vec<(ImtPoint, ImtPoint)>,
+	min_x: f32,
+	min_y: f32,
+	max_x: f32,
+	max_y: f32,
+	scaler: f32,
 }
 
-impl BstGlyphBitmap {
-	pub fn new(glyph_raw: Arc<BstGlyphRaw>) -> BstGlyphBitmap {
-		let bearing_x = glyph_raw.min_x - 1.0;
-		let bearing_y = glyph_raw.font.ascender - glyph_raw.max_y.floor() - 1.0;
-		let width = (glyph_raw.max_x.ceil() - glyph_raw.min_x.ceil()) as u32 + 2;
-		let height = (glyph_raw.max_y.ceil() - glyph_raw.min_y.ceil()) as u32 + 2;
+impl ImtGlyphBitmap {
+	pub fn new(parser: &ImtParser, parsed: Arc<ImtParsedGlyph>, text_height: f32) -> ImtGlyphBitmap {
+		let scaler = parser.font_props.scaler * text_height;
+		let ascender = parser.font_props.ascender * scaler;
+		let min_x = parsed.min_x * scaler;
+		let min_y = parsed.min_y * scaler;
+		let max_x = parsed.max_x * scaler;
+		let max_y = parsed.max_y * scaler;
+		let bearing_x = min_x - 1.0;
+		let bearing_y = ascender - max_y.floor() - 1.0;
+		let width = (max_x.ceil() - min_x.ceil()) as u32 + 2;
+		let height = (max_y.ceil() -min_y.ceil()) as u32 + 2;
 		
 		let mut data = Vec::with_capacity(width as usize);
 		data.resize_with(width as usize, || {
@@ -54,18 +60,23 @@ impl BstGlyphBitmap {
 			col
 		});
 		
-		BstGlyphBitmap {
+		ImtGlyphBitmap {
+			parsed,
 			width,
 			height,
 			bearing_x,
 			bearing_y,
 			data,
-			glyph_raw,
 			lines: Vec::new(),
+			min_x,
+			min_y,
+			max_x,
+			max_y,
+			scaler,
 		}
 	}
 	
-	pub fn draw_gpu(&mut self, cache: &BstGlyphBitmapCache) -> Result<(), BstTextError> {
+	pub(crate) fn raster(&mut self, raster: &ImtRaster) -> Result<(), ImtError> {
 		if self.width == 0 || self.height == 0 {
 			return Ok(());
 		}
@@ -80,18 +91,22 @@ impl BstGlyphBitmap {
 		for (pt_a, pt_b) in &self.lines {
 			let i = line_data.count;
 			line_data.lines[i as usize] = [
-				pt_a.x - self.glyph_raw.min_x + (self.glyph_raw.min_x.ceil() - self.glyph_raw.min_x) + 1.0,
-				pt_a.y - self.glyph_raw.min_y + (self.glyph_raw.min_y.ceil() - self.glyph_raw.min_y) + 1.0,
-				pt_b.x - self.glyph_raw.min_x + (self.glyph_raw.min_x.ceil() - self.glyph_raw.min_x) + 1.0,
-				pt_b.y - self.glyph_raw.min_y + (self.glyph_raw.min_y.ceil() - self.glyph_raw.min_y) + 1.0
+				pt_a.x - self.min_x + (self.min_x.ceil() - self.min_x) + 1.0,
+				pt_a.y - self.min_y + (self.min_y.ceil() - self.min_y) + 1.0,
+				pt_b.x - self.min_x + (self.min_x.ceil() - self.min_x) + 1.0,
+				pt_b.y - self.min_y + (self.min_y.ceil() - self.min_y) + 1.0
 			];
 			line_data.count += 1;
 		}
 		
-		let line_data_buf = CpuAccessibleBuffer::from_data(cache.device.clone(), BufferUsage::all(), line_data).unwrap();
+		let line_data_buf = CpuAccessibleBuffer::from_data(
+			raster.device.clone(),
+			BufferUsage::all(), // TODO: Specific Usage
+			line_data
+		).unwrap();
 		
 		let p1_out_image = AttachmentImage::with_usage(
-			cache.device.clone(),
+			raster.device.clone(),
 			[self.width, self.height],
 			Format::R8Unorm,
 			ImageUsage {
@@ -104,7 +119,7 @@ impl BstGlyphBitmap {
 		
 		let p1_render_pass = Arc::new(
 			vulkano::single_pass_renderpass!(
-				cache.device.clone(),
+				raster.device.clone(),
 				attachments: {
 					color: {
 						load: Clear,
@@ -122,9 +137,9 @@ impl BstGlyphBitmap {
 		
 		let p1_pipeline = Arc::new(
 			GraphicsPipeline::start()
-				.vertex_input_single_buffer::<ShaderVert>()
-				.vertex_shader(cache.square_vs.main_entry_point(), ())
-				.fragment_shader(cache.glyph_base_fs.main_entry_point(), ())
+				.vertex_input_single_buffer::<ImtShaderVert>()
+				.vertex_shader(raster.square_vs.main_entry_point(), ())
+				.fragment_shader(raster.glyph_base_fs.main_entry_point(), ())
 				.primitive_topology(PrimitiveTopology::TriangleList)
 				.render_pass(Subpass::from(p1_render_pass.clone(), 0).unwrap())
 				.viewports(::std::iter::once(Viewport {
@@ -133,13 +148,13 @@ impl BstGlyphBitmap {
 					dimensions: [self.width as f32, self.height as f32],
 				}))
 				.depth_stencil_disabled()
-				.build(cache.device.clone()).unwrap()
+				.build(raster.device.clone()).unwrap()
 		);
 		
 		let p1_set = PersistentDescriptorSet::start(p1_pipeline.descriptor_set_layout(0).unwrap().clone())
 			.add_buffer(line_data_buf.clone()).unwrap()
-			.add_buffer(cache.sample_data_buf.clone()).unwrap()
-			.add_buffer(cache.ray_data_buf.clone()).unwrap()
+			.add_buffer(raster.sample_data_buf.clone()).unwrap()
+			.add_buffer(raster.ray_data_buf.clone()).unwrap()
 			.build().unwrap();
 
 		let p1_framebuffer = Arc::new(
@@ -150,7 +165,7 @@ impl BstGlyphBitmap {
 		
 		let p2_render_pass = Arc::new(
 			vulkano::single_pass_renderpass!(
-				cache.device.clone(),
+				raster.device.clone(),
 				attachments: {
 					color: {
 						load: Clear,
@@ -168,10 +183,10 @@ impl BstGlyphBitmap {
 		
 		let p2_pipeline = Arc::new(
 			GraphicsPipeline::start()
-				.vertex_input_single_buffer::<ShaderVert>()
-				.vertex_shader(cache.square_vs.main_entry_point(), ())
+				.vertex_input_single_buffer::<ImtShaderVert>()
+				.vertex_shader(raster.square_vs.main_entry_point(), ())
 				.viewports_dynamic_scissors_irrelevant(1)
-				.fragment_shader(cache.glyph_post_fs.main_entry_point(), ())
+				.fragment_shader(raster.glyph_post_fs.main_entry_point(), ())
 				.render_pass(Subpass::from(p2_render_pass.clone(), 0).unwrap())
 				.viewports(::std::iter::once(Viewport {
 					origin: [0.0, 0.0],
@@ -179,11 +194,11 @@ impl BstGlyphBitmap {
 					dimensions: [self.width as f32, self.height as f32],
 				}))
 				.depth_stencil_disabled()
-				.build(cache.device.clone()).unwrap()
+				.build(raster.device.clone()).unwrap()
 		);
 		
 		let p2_out_image = AttachmentImage::with_usage(
-			cache.device.clone(),
+			raster.device.clone(),
 			[self.width, self.height],
 			Format::R8Unorm,
 			ImageUsage {
@@ -200,18 +215,18 @@ impl BstGlyphBitmap {
 		);
 		
 		let p2_set = PersistentDescriptorSet::start(p2_pipeline.descriptor_set_layout(0).unwrap().clone())
-			.add_sampled_image(p1_out_image.clone(), cache.sampler.clone()).unwrap()
+			.add_sampled_image(p1_out_image.clone(), raster.sampler.clone()).unwrap()
 			.build().unwrap();
 			
 		let buffer_out = CpuAccessibleBuffer::from_iter(
-			cache.device.clone(),
+			raster.device.clone(),
 			BufferUsage::all(),
 			(0 .. self.width * self.height).map(|_| 0u8)
 		).unwrap();
 			
 		AutoCommandBufferBuilder::primary_one_time_submit(
-			cache.device.clone(),
-			cache.queue.family()
+			raster.device.clone(),
+			raster.queue.family()
 		).unwrap()
 			.begin_render_pass(
 				p1_framebuffer.clone(),
@@ -221,7 +236,7 @@ impl BstGlyphBitmap {
 			.draw(
 				p1_pipeline.clone(),
 				&vulkano::command_buffer::DynamicState::none(),
-				cache.square_buf.clone(),
+				raster.square_buf.clone(),
 				p1_set,
 				()
 			).unwrap()
@@ -234,14 +249,14 @@ impl BstGlyphBitmap {
 			.draw(
 				p2_pipeline.clone(),
 				&vulkano::command_buffer::DynamicState::none(),
-				cache.square_buf.clone(),
+				raster.square_buf.clone(),
 				p2_set,
 				()
 			).unwrap()
 			.end_render_pass().unwrap()
 			.copy_image_to_buffer(p2_out_image.clone(), buffer_out.clone()).unwrap()
 			.build().unwrap()
-			.execute(cache.queue.clone()).unwrap()
+			.execute(raster.queue.clone()).unwrap()
 			.then_signal_fence_and_flush().unwrap()
 			.wait(None).unwrap();
 		
@@ -256,34 +271,41 @@ impl BstGlyphBitmap {
 		Ok(())
 	}
 	
-	pub fn create_outline(&mut self) {
-		let glyph_raw = self.glyph_raw.clone();
-		
-		for geometry in &glyph_raw.geometry {
-			self.draw_geometry(geometry);
+	pub(crate) fn create_outline(&mut self) {
+		for geometry in self.parsed.geometry.clone() {
+			self.draw_geometry(&geometry);
 		}
 	}
 	
-	pub fn draw_geometry(&mut self, geo: &BstGlyphGeo) {
+	fn draw_geometry(&mut self, geo: &ImtGeometry) {
 		match geo {
-			&BstGlyphGeo::Line(ref points) => self.draw_line(&points[0], &points[1]),
-			&BstGlyphGeo::Curve(ref points) => self.draw_curve(&points[0], &points[1], &points[2])
+			&ImtGeometry::Line(ref points) => self.draw_line(&points[0], &points[1]),
+			&ImtGeometry::Curve(ref points) => self.draw_curve(&points[0], &points[1], &points[2])
 		}
 	}
 	
-	pub fn draw_line(
+	fn draw_line(
 		&mut self,
-		point_a: &BstGlyphPoint,
-		point_b: &BstGlyphPoint
+		point_a: &ImtPoint,
+		point_b: &ImtPoint
 	) {
-		self.lines.push((point_a.clone(), point_b.clone()));
+		self.lines.push((
+			ImtPoint {
+				x: point_a.x * self.scaler,
+				y: point_a.y * self.scaler
+			},
+			ImtPoint {
+				x: point_b.x * self.scaler,
+				y: point_b.y * self.scaler,
+			}
+		));
 	}
 	
-	pub fn draw_curve(
+	fn draw_curve(
 		&mut self,
-		point_a: &BstGlyphPoint,
-		point_b: &BstGlyphPoint,
-		point_c: &BstGlyphPoint
+		point_a: &ImtPoint,
+		point_b: &ImtPoint,
+		point_c: &ImtPoint
 	) {
 		let mut length = 0.0;
 		let mut last_point = point_a.clone();
@@ -291,7 +313,7 @@ impl BstGlyphBitmap {
 		
 		for s in 1..=steps {
 			let t = s as f32 / steps as f32;
-			let next_point = BstGlyphPoint {
+			let next_point = ImtPoint {
 				x: ((1.0-t).powi(2)*point_a.x)+(2.0*(1.0-t)*t*point_b.x)+(t.powi(2)*point_c.x),
 				y: ((1.0-t).powi(2)*point_a.y)+(2.0*(1.0-t)*t*point_b.y)+(t.powi(2)*point_c.y)
 			};
@@ -300,7 +322,7 @@ impl BstGlyphBitmap {
 			last_point = next_point;
 		}
 		
-		steps = (length * 2.0).ceil() as usize;
+		steps = (length * self.scaler * 2.0).ceil() as usize;
 		
 		if steps < 3 {
 			steps = 3;
@@ -310,7 +332,7 @@ impl BstGlyphBitmap {
 		
 		for s in 1..=steps {
 			let t = s as f32 / steps as f32;
-			let next_point = BstGlyphPoint {
+			let next_point = ImtPoint {
 				x: ((1.0-t).powi(2)*point_a.x)+(2.0*(1.0-t)*t*point_b.x)+(t.powi(2)*point_c.x),
 				y: ((1.0-t).powi(2)*point_a.y)+(2.0*(1.0-t)*t*point_b.y)+(t.powi(2)*point_c.y)
 			};
