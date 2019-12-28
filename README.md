@@ -10,7 +10,7 @@ ilmenite.add_font(ImtFont::from_file(
 	ImtWeight::Normal, 
 	ImtRasterOps::default(),
 	device,
-	queue
+	queue,
 	"MyFont.ttf"
 ).unwrap());
 
