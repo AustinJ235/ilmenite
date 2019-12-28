@@ -11,3 +11,4 @@ vulkano = { path = "../vulkano/vulkano" }
 vulkano-shaders = { path = "../vulkano/vulkano-shaders" }
 allsorts = "0.1.0"
 ordered-float = "1.0.2"
+parking_lot = "0.10.0"
