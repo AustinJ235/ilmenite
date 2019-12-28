@@ -1,0 +1,12 @@
+[package]
+name = "examples"
+version = "0.0.0"
+authors = ["Austin <me@austinj.me>"]
+publish = false
+
+[dependencies]
+basalt = { git = "https://github.com/AustinJ235/basalt.git", rev ="f11cd4b72aee35a365ced82a22ecb130b77afc0f" }
+
+[patch.'https://github.com/austinj235/ilmenite']
+ilmenite = { path = "../" }
+

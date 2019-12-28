@@ -162,7 +162,9 @@ impl ImtParser {
 		
 		let font_props = ImtFontProps {
 			scaler,
-			ascender: hhea.ascender as f32 + head.y_min as f32,
+			// TODO: (head.units_per_em as f32 / 22.0).floor()
+			//			This is needed to adjust the y_min for some reason
+			ascender: hhea.ascender as f32 + head.y_min as f32 + (head.units_per_em as f32 / 22.0).floor(),
 			descender: hhea.descender as f32,
 			line_gap,
 		};
