@@ -2,6 +2,13 @@
 name = "ilmenite"
 version = "0.0.1"
 authors = ["Austin Johnson <me@austinj.me>"]
+repository = "https://github.com/AustinJ235/ilmenite"
+documentation = "https://docs.rs/ilmenite"
+description = "A rust library for shaping, placing, and rasterizing text primarily for Basalt."
+license = "MIT"
+readme = "README.md"
+keywords = ["vulkan", "text", "shaper", "raster"]
+categories = ["graphics","gui","parsing","text-processing"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

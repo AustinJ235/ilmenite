@@ -32,12 +32,6 @@ pub enum ImtTextWrap {
 }
 
 #[derive(Clone,Debug,PartialEq)]
-pub enum ImtPixelAlign {
-	Care,
-	DontCare,
-}
-
-#[derive(Clone,Debug,PartialEq)]
 pub struct ImtShapeOpts {
 	pub body_width: f32,
 	pub body_height: f32,
@@ -45,7 +39,6 @@ pub struct ImtShapeOpts {
 	pub text_wrap: ImtTextWrap,
 	pub vert_align: ImtVertAlign,
 	pub hori_align: ImtHoriAlign,
-	pub pixel_align: ImtPixelAlign,
 }
 
 impl Default for ImtShapeOpts {
@@ -57,7 +50,6 @@ impl Default for ImtShapeOpts {
 			text_wrap: ImtTextWrap::None,
 			vert_align: ImtVertAlign::Top,
 			hori_align: ImtHoriAlign::Left,
-			pixel_align: ImtPixelAlign::Care
 		}
 	}
 }

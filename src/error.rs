@@ -25,11 +25,13 @@ pub enum ImtErrorSrc {
 	Glyph,
 	Bitmap,
 	Vhea,
+	Ilmenite,
 }
 
 #[derive(Clone,Debug,PartialEq)]
 pub enum ImtErrorTy {
 	Unimplemented,
+	FileRead,
 	FileGeneric,
 	FileBadEof,
 	FileBadValue,
@@ -44,6 +46,7 @@ pub enum ImtErrorTy {
 	FileMissingSubTable,
 	MissingIndex,
 	MissingGlyph,
+	MissingFont,
 	UnimplementedDataTy,
 	Other(String),
 }
