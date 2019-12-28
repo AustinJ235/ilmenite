@@ -158,11 +158,13 @@ impl ImtParser {
 		let default_pixel_height = 1.0;
 		// TODO 1.00 should be 1.33 but why?
 		let scaler = ((default_pixel_height * 1.00) * default_dpi) / (default_dpi * head.units_per_em as f32);
+		let line_gap = hhea.line_gap as f32 + hhea.ascender as f32 - (hhea.ascender as f32 + head.y_min as f32);
+		
 		let font_props = ImtFontProps {
 			scaler,
-			ascender: hhea.ascender as f32,
+			ascender: hhea.ascender as f32 + head.y_min as f32,
 			descender: hhea.descender as f32,
-			line_gap: hhea.line_gap as f32,
+			line_gap,
 		};
 		
 		Ok(ImtParser {
