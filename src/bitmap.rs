@@ -40,7 +40,7 @@ pub struct ImtGlyphBitmap {
 }
 
 impl ImtGlyphBitmap {
-	pub fn new(parser: &ImtParser, parsed: Arc<ImtParsedGlyph>, text_height: f32) -> ImtGlyphBitmap {
+	pub fn new(parser: &mut ImtParser, parsed: Arc<ImtParsedGlyph>, text_height: f32) -> ImtGlyphBitmap {
 		let scaler = parser.font_props.scaler * text_height;
 		let ascender = parser.font_props.ascender * scaler;
 		let min_x = parsed.min_x * scaler;

@@ -162,7 +162,7 @@ impl ImtRaster {
 	
 	pub fn raster_shaped_glyphs(
 		&mut self,
-		parser: &ImtParser,
+		parser: &mut ImtParser,
 		text_height: f32,
 		shaped_glyphs: Vec<ImtShapedGlyph>
 	) -> Result<Vec<ImtRasteredGlyph>, ImtError> {

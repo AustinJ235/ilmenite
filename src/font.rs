@@ -98,7 +98,7 @@ impl ImtFont {
 		let lang = ImtLang::Default;
 		let parsed_glyphs = self.parser.retreive_text(text, script, lang)?;
 		let shaped_glyphs = self.shaper.shape_parsed_glyphs(&mut self.parser, script, lang, shape_ops, parsed_glyphs)?;
-		let rastered_glyphs = self.raster.raster_shaped_glyphs(&self.parser, text_height, shaped_glyphs)?;
+		let rastered_glyphs = self.raster.raster_shaped_glyphs(&mut self.parser, text_height, shaped_glyphs)?;
 		let font_props = self.parser.font_props();	
 		
 		Ok(rastered_glyphs.into_iter().map(|g| {

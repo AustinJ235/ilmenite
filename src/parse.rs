@@ -27,6 +27,21 @@ use allsorts::layout::LayoutCache;
 
 unsafe impl Send for ImtParser {}
 
+/* --- WARNING ABOUT SEND IMPLEMENTATION ----------------------------------------
+	From my understanding of the allsorts library and how it is used in this
+	this library it is safe to force impl Send for this struct. As long as
+	the following conditions are met:
+		-	Only one thread at time can access fields be it for read or writes.
+			Fields which are public are only public to this crate.
+		-	All data used from the parser does not contain any references or
+			Rc's from the parser. All data created from this parser are owned or
+			is thread safe.
+	This library will main the above conditions to ensure that the public
+	api is safe to use. Any modifications to this lib MUST keep these conditions
+	in mind. All public functions in this library do not export or expose any
+	references or Rc's belonging parsers fields/data.
+-------------------------------------------------------------------------------- */
+
 #[allow(dead_code)]
 pub struct ImtParser {
 	bytes: Vec<u8>,
@@ -181,11 +196,11 @@ impl ImtParser {
 		})
 	}
 	
-	pub fn font_props(&self) -> ImtFontProps {
+	pub fn font_props(&mut self) -> ImtFontProps {
 		self.font_props.clone()
 	}
 	
-	fn glyph_for_char(&self, c: char) -> Result<RawGlyph<()>, ImtError> {
+	fn glyph_for_char(&mut self, c: char) -> Result<RawGlyph<()>, ImtError> {
 		let index = Some(self.cmap_sub.map_glyph(c as u32)
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
 			.ok_or(ImtError::src_and_ty(ImtErrorSrc::Cmap, ImtErrorTy::MissingGlyph))?);
@@ -211,9 +226,9 @@ impl ImtParser {
 			glyphs.push(self.glyph_for_char(c)?);
 		}
 		
-		if let &Some(ref gsub) = &self.gsub_op {
-			let sub_glyph = self.glyph_for_char('\u{25cc}')?;
+		let sub_glyph = self.glyph_for_char(' ')?;
 		
+		if let &Some(ref gsub) = &self.gsub_op {
 			gsub_apply_default(
 				&|| vec![sub_glyph.clone()],
 				&gsub,
