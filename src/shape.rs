@@ -9,6 +9,7 @@ use crate::ImtLang;
 
 use allsorts::gpos::{gpos_apply,Info,Placement};
 use std::sync::Arc;
+use std::rc::Rc;
 
 #[derive(Clone,Debug,PartialEq)]
 pub enum ImtVertAlign {
@@ -106,15 +107,19 @@ impl ImtShaper {
 		let mut infos = Info::init_from_glyphs(parser.gdef_op.as_ref(), raw_glyphs)
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GsubInfo, e))?;
 			
-		if let &Some(ref gpos) = &parser.gpos_op {
+		if let Some(gpos) = parser.gpos_op.take() {
+			let gpos_rc = Rc::new(gpos);
+			
 			gpos_apply(
-				gpos,
+				&gpos_rc,
 				parser.gdef_op.as_ref(),
 				true,
 				script.tag(),
 				lang.tag(),
 				&mut infos
 			).map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GPOS, e))?;
+			
+			parser.gpos_op = Some(Rc::try_unwrap(gpos_rc).ok().unwrap());
 		}
 		
 		let mut x: f32 = 0.0;

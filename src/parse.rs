@@ -25,9 +25,11 @@ use std::collections::BTreeMap;
 use allsorts::tables::cmap::CmapSubtable;
 use allsorts::layout::LayoutCache;
 
+unsafe impl Send for ImtParser {}
+
 #[allow(dead_code)]
 pub struct ImtParser {
-	bytes: &'static [u8],
+	bytes: Vec<u8>,
 	scope: ReadScope<'static>,
 	pub(crate) head: HeadTable,
 	pub(crate) maxp: MaxpTable,
@@ -62,11 +64,11 @@ pub struct ImtParsedGlyph {
 }
 
 impl ImtParser {
-	pub fn new(bytes: &'static [u8]) -> Result<Self, ImtError> {
+	pub fn new(bytes: Vec<u8>) -> Result<Self, ImtError> {
 		let OpenTypeFile {
 			scope,
 			font
-		} = ReadScope::new(bytes)
+		} = ReadScope::new(unsafe { &*(bytes.as_ref() as *const _) })
 			.read::<OpenTypeFile>()
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::File, e))?;
 		
@@ -142,7 +144,7 @@ impl ImtParser {
 			.ok_or(ImtError::src_and_ty(ImtErrorSrc::Glyf, ImtErrorTy::FileMissingTable))?
 			.read_table(&scope)
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e))?
-			.read_dep::<GlyfTable>(unsafe { &*(&loca as *const _) }) // TODO: Is this workaround needed?
+			.read_dep::<GlyfTable>(unsafe { &*(&loca as *const _) })
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e))?;
 		
 		let gsub_op = match otf.find_table_record(tag::GSUB) {

@@ -35,8 +35,6 @@ pub(crate) struct ImtFontKey {
 }
 
 pub struct ImtFont {
-	#[allow(dead_code)]
-	bytes: Vec<u8>,
 	family: String,
 	weight: ImtWeight,
 	parser: ImtParser,
@@ -69,14 +67,11 @@ impl ImtFont {
 		queue: Arc<Queue>,
 		bytes: Vec<u8>
 	) -> Result<ImtFont, ImtError> {
-		// TODO: 	Maybe unsafe? We are keeping bytes alive for the duration
-		//			of the parser's lifetime.
-		let parser = ImtParser::new(unsafe { &*(bytes.as_ref() as *const _) })?;
+		let parser = ImtParser::new(bytes)?;
 		let shaper = ImtShaper::new()?;
 		let raster = ImtRaster::new(device, queue, raster_ops)?;
 		
 		Ok(ImtFont {
-			bytes,
 			family: family.into(),
 			weight,
 			parser,

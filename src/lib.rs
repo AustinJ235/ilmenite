@@ -63,10 +63,6 @@ pub struct Ilmenite {
 	fonts: Mutex<HashMap<ImtFontKey, ImtFont>>,
 }
 
-// TODO: Not sure why these are needed
-unsafe impl Send for Ilmenite {}
-unsafe impl Sync for Ilmenite {}
-
 impl Ilmenite {
 	pub fn new() -> Self {
 		Ilmenite {
