@@ -86,8 +86,7 @@ pub mod glyph_base_fs {
 					}
 				}
 				
-				
-				color = float(filled) / float(sample_data.samples);
+				color = sqrt(float(filled) / float(sample_data.samples));
 			}
 		"
 	}

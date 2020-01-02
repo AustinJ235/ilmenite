@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::collections::BTreeMap;
 use allsorts::tables::cmap::CmapSubtable;
 use allsorts::layout::LayoutCache;
+use allsorts::tables::glyf::CompositeGlyphArgument;
 
 unsafe impl Send for ImtParser {}
 
@@ -36,10 +37,6 @@ unsafe impl Send for ImtParser {}
 		-	All data used from the parser does not contain any references or
 			Rc's from the parser. All data created from this parser are owned or
 			is thread safe.
-	This library will main the above conditions to ensure that the public
-	api is safe to use. Any modifications to this lib MUST keep these conditions
-	in mind. All public functions in this library do not export or expose any
-	references or Rc's belonging parsers fields/data.
 -------------------------------------------------------------------------------- */
 
 #[allow(dead_code)]
@@ -203,7 +200,10 @@ impl ImtParser {
 	fn glyph_for_char(&mut self, c: char) -> Result<RawGlyph<()>, ImtError> {
 		let index = Some(self.cmap_sub.map_glyph(c as u32)
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
-			.ok_or(ImtError::src_and_ty(ImtErrorSrc::Cmap, ImtErrorTy::MissingGlyph))?);
+			.unwrap_or(
+				self.cmap_sub.map_glyph('?' as u32)
+					.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?	
+					.ok_or(ImtError::src_and_ty(ImtErrorSrc::Cmap, ImtErrorTy::MissingGlyph))?));
 			
 		Ok(RawGlyph {
 			unicodes: vec![c],
@@ -222,11 +222,11 @@ impl ImtParser {
 	pub fn retreive_text<T: AsRef<str>>(&mut self, text: T, script: ImtScript, lang: ImtLang) -> Result<Vec<Arc<ImtParsedGlyph>>, ImtError> {
 		let mut glyphs = Vec::new();
 		
-		for c in text.as_ref().chars() {
+		for c in text.as_ref().replace("\r", "").chars() {
 			glyphs.push(self.glyph_for_char(c)?);
 		}
 		
-		let sub_glyph = self.glyph_for_char(' ')?;
+		let sub_glyph = self.glyph_for_char('?')?;
 		
 		if let &Some(ref gsub) = &self.gsub_op {
 			gsub_apply_default(
@@ -247,125 +247,169 @@ impl ImtParser {
 			let index = glyph.glyph_index.unwrap();
 			
 			if self.parsed_glyphs.get(&index).is_none() {
-				let glyf_record = self.glyf.records.get_mut(index as usize)
-					.ok_or(ImtError::src_and_ty(ImtErrorSrc::Glyf, ImtErrorTy::MissingGlyph))?;
+				let mut geometry_indexes: Vec<(u16, f32, f32)> = vec![(index, 0.0, 0.0)];
+				let mut geometry = Vec::new();
+				let mut min_x = None;
+				let mut min_y = None;
+				let mut max_x = None;
+				let mut max_y = None;
 				
-				if let Some(parsed_record) = match &glyf_record {
-					&GlyfRecord::Present(ref record_scope) => Some(
-						GlyfRecord::Parsed(
-							record_scope.read::<glyf::Glyph>()
-								.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e))?
-						)
-					), _ => None
-				} {
-					*glyf_record = parsed_record;
-				}
-				
-				let imt_raw_glyph = match &glyf_record {
-					&GlyfRecord::Parsed(ref glfy_glyph) => {
-						let min_x = glfy_glyph.bounding_box.x_min as f32;
-						let min_y = glfy_glyph.bounding_box.y_min as f32;
-						let max_x = glfy_glyph.bounding_box.x_max as f32;
-						let max_y = glfy_glyph.bounding_box.y_max as f32;
-						
-						let geometry = match &glfy_glyph.data {
-							&glyf::GlyphData::Simple(ref simple) => {
-								let mut geometry = Vec::new();
-								let mut contour = Vec::new();
-								
-								for i in 0..simple.coordinates.len() {
-									contour.push((
-										i,
-										simple.coordinates[i].0 as f32,
-										simple.coordinates[i].1 as f32
-									));
-								
-									if simple.end_pts_of_contours.contains(&(i as u16)) {
-										for j in 0..contour.len() {
-											if !simple.flags[contour[j].0].is_on_curve() {
-												let p_i = if j == 0 {
-													contour.len() - 1
-												} else {
-													j - 1
-												}; let n_i = if j == contour.len() - 1 {
-													0
-												} else {
-													j + 1
-												};
-												
-												let a = if simple.flags[contour[p_i].0].is_on_curve() {
-													(contour[p_i].1, contour[p_i].2)
-												} else {
-													(
-														(contour[p_i].1 + contour[j].1) / 2.0,
-														(contour[p_i].2 + contour[j].2) / 2.0
-													)
-												};
-												
-												let c = if simple.flags[contour[n_i].0].is_on_curve() {
-													(contour[n_i].1, contour[n_i].2)
-												} else {
-													(
-														(contour[n_i].1 + contour[j].1) / 2.0,
-														(contour[n_i].2 + contour[j].2) / 2.0
-													)
-												};
-												
-												let b = (contour[j].1, contour[j].2);
-												
-												geometry.push(ImtGeometry::Curve([
-													ImtPoint { x: a.0, y: a.1 },
-													ImtPoint { x: b.0, y: b.1 },
-													ImtPoint { x: c.0, y: c.1 }
-												]));
-											} else {
-												let n_i = if j == contour.len() - 1 {
-													0
-												} else {
-													j + 1
-												};
-												
-												if simple.flags[contour[n_i].0].is_on_curve() {
-													geometry.push(ImtGeometry::Line([
-														ImtPoint { x: contour[j].1, y: contour[j].2 },
-														ImtPoint { x: contour[n_i].1, y: contour[n_i].2 }
+				while let Some((geometry_index, gox, goy)) = geometry_indexes.pop() {
+					let glyf_record = self.glyf.records.get_mut(geometry_index as usize)
+						.ok_or(ImtError::src_and_ty(ImtErrorSrc::Glyf, ImtErrorTy::MissingGlyph))?;
+					
+					if let Some(parsed_record) = match &glyf_record {
+						&GlyfRecord::Present(ref record_scope) => Some(
+							GlyfRecord::Parsed(
+								record_scope.read::<glyf::Glyph>()
+									.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e))?
+							)
+						), _ => None
+					} {
+						*glyf_record = parsed_record;
+					}
+					
+					match &glyf_record {
+						&GlyfRecord::Parsed(ref glfy_glyph) => {
+							let g_min_x = glfy_glyph.bounding_box.x_min as f32 - gox as f32;
+							let g_min_y = glfy_glyph.bounding_box.y_min as f32 - goy as f32;
+							let g_max_x = glfy_glyph.bounding_box.x_max as f32 - gox as f32;
+							let g_max_y = glfy_glyph.bounding_box.y_max as f32 - goy as f32;
+							
+							if min_x.is_none() || g_min_x < *min_x.as_ref().unwrap() {
+								min_x = Some(g_min_x);
+							}
+							
+							if min_y.is_none() || g_min_y < *min_y.as_ref().unwrap() {
+								min_y = Some(g_min_y);
+							}
+							
+							if max_x.is_none() || g_max_x > *max_x.as_ref().unwrap() {
+								max_x = Some(g_max_x);
+							}
+							
+							if max_y.is_none() || g_max_y > *max_y.as_ref().unwrap() {
+								max_y = Some(g_max_y);
+							}
+							
+							match &glfy_glyph.data {
+								&glyf::GlyphData::Simple(ref simple) => {
+									let mut contour = Vec::new();
+									
+									for i in 0..simple.coordinates.len() {
+										contour.push((
+											i,
+											simple.coordinates[i].0 as f32,
+											simple.coordinates[i].1 as f32
+										));
+									
+										if simple.end_pts_of_contours.contains(&(i as u16)) {
+											for j in 0..contour.len() {
+												if !simple.flags[contour[j].0].is_on_curve() {
+													let p_i = if j == 0 {
+														contour.len() - 1
+													} else {
+														j - 1
+													}; let n_i = if j == contour.len() - 1 {
+														0
+													} else {
+														j + 1
+													};
+													
+													let a = if simple.flags[contour[p_i].0].is_on_curve() {
+														(contour[p_i].1, contour[p_i].2)
+													} else {
+														(
+															(contour[p_i].1 + contour[j].1) / 2.0,
+															(contour[p_i].2 + contour[j].2) / 2.0
+														)
+													};
+													
+													let c = if simple.flags[contour[n_i].0].is_on_curve() {
+														(contour[n_i].1, contour[n_i].2)
+													} else {
+														(
+															(contour[n_i].1 + contour[j].1) / 2.0,
+															(contour[n_i].2 + contour[j].2) / 2.0
+														)
+													};
+													
+													let b = (contour[j].1, contour[j].2);
+													
+													geometry.push(ImtGeometry::Curve([
+														ImtPoint {
+															x: a.0 as f32 + gox as f32,
+															y: a.1 as f32 + goy as f32
+														},
+														ImtPoint {
+															x: b.0 as f32 + gox as f32,
+															y: b.1 as f32 + goy as f32
+														},
+														ImtPoint {
+															x: c.0 as f32 + gox as f32,
+															y: c.1 as f32 + goy as f32
+														}
 													]));
+												} else {
+													let n_i = if j == contour.len() - 1 {
+														0
+													} else {
+														j + 1
+													};
+													
+													if simple.flags[contour[n_i].0].is_on_curve() {
+														geometry.push(ImtGeometry::Line([
+															ImtPoint {
+																x: contour[j].1 as f32 + gox as f32,
+																y: contour[j].2 as f32 + goy as f32
+															},
+															ImtPoint {
+																x: contour[n_i].1 as f32 + gox as f32,
+																y: contour[n_i].2 as f32 + goy as f32
+															}
+														]));
+													}
 												}
 											}
+											
+											contour.clear();
 										}
+									}
+								},
+								glyf::GlyphData::Composite { glyphs, .. } => {
+									for glyph in glyphs {
+										let x: f32 = match glyph.argument1 {
+											CompositeGlyphArgument::U8(v) => v as f32,
+											CompositeGlyphArgument::I8(v) => v as f32,
+											CompositeGlyphArgument::U16(v) => v as f32,
+											CompositeGlyphArgument::I16(v) => v as f32,
+										};
 										
-										contour.clear();
+										let y: f32 = match glyph.argument2 {
+											CompositeGlyphArgument::U8(v) => v as f32,
+											CompositeGlyphArgument::I8(v) => v as f32,
+											CompositeGlyphArgument::U16(v) => v as f32,
+											CompositeGlyphArgument::I16(v) => v as f32,
+										};
+										
+										geometry_indexes.push((glyph.glyph_index, x, y));
 									}
 								}
-						
-								geometry
-							},
-							glyf::GlyphData::Composite { .. } => {
-								return Err(ImtError::src_and_ty(ImtErrorSrc::Glyph, ImtErrorTy::UnimplementedDataTy));
-							}
-						};
-						
-						ImtParsedGlyph {
-							inner: glyph,
-							min_x,
-							min_y,
-							max_x,
-							max_y,
-							geometry,
-						}
-					},
-					&GlyfRecord::Empty => ImtParsedGlyph {
-						inner: glyph,
-						min_x: 0.0,
-						min_y: 0.0,
-						max_x: 0.0,
-						max_y: 0.0,
-						geometry: Vec::new()
-					},
-					&GlyfRecord::Present(_) => panic!("Glyph should already be parsed!"),
-				};
+							};
+						},
+						&GlyfRecord::Empty => continue,
+						&GlyfRecord::Present(_) => panic!("Glyph should already be parsed!"),
+					};
+				}
 				
-				self.parsed_glyphs.insert(index, Arc::new(imt_raw_glyph));
+				self.parsed_glyphs.insert(index, Arc::new(ImtParsedGlyph {
+					inner: glyph,
+					min_x: min_x.unwrap_or(0.0),
+					min_y: min_y.unwrap_or(0.0),
+					max_x: max_x.unwrap_or(0.0),
+					max_y: max_y.unwrap_or(0.0),
+					geometry,
+				}));
 			}
 			
 			imt_raw_glyphs.push(self.parsed_glyphs.get(&index).unwrap().clone());
