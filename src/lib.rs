@@ -53,6 +53,8 @@ pub struct ImtGlyph {
 	pub y: f32,
 	pub w: u32,
 	pub h: u32,
+	pub crop_x: f32,
+	pub crop_y: f32,
 	pub family: String,
 	pub weight: ImtWeight,
 	pub index: u16,
