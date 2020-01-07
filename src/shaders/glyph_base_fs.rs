@@ -10,8 +10,11 @@ pub mod glyph_base_fs {
 			layout(set = 0, binding = 0) uniform LineData {
 				vec4 lines[1024];
 				uint count;
-				float width;
-				float height;
+				uint width;
+				uint height;
+				vec4 bounds;
+				vec4 pixel_align_offset;
+				float scaler;
 			} line_data;
 			
 			layout(set = 0, binding = 1) uniform SampleData {
@@ -54,8 +57,7 @@ pub mod glyph_base_fs {
 						&& ccw(l2p1, l2p2, l1p1) * ccw(l2p1, l2p2, l1p2) <= 0;
 			}
 			
-			bool is_filled(vec2 ray_src) {
-				float ray_len = length(vec2(line_data.width, line_data.height));
+			bool is_filled(vec2 ray_src, float ray_len) {
 				int least_hits = -1;
 				
 				for(uint ray_dir_i = 0; ray_dir_i < ray_data.count; ray_dir_i++) {
@@ -75,13 +77,34 @@ pub mod glyph_base_fs {
 				
 				return least_hits % 2 != 0;
 			}
+			
+			vec2 transform_coords(vec2 in_coords, uint offset_i) {
+				// In TTF Y is Up so flip Y
+				vec2 coords = vec2(in_coords.x, -in_coords.y);
+				// Convert coords to Pixels
+				coords *= vec2(float(line_data.width), float(line_data.height)); 
+				// Apply the pixel offset for sampling
+				coords += sample_data.offsets[offset_i].xy;
+				// Bearings are rounded so image doesn't sit on pixel borders
+				coords += vec2(line_data.pixel_align_offset.x, -line_data.pixel_align_offset.y);
+				// Convert to font units
+				coords /= line_data.scaler;
+				// Bearing adjustment
+				coords += vec2(line_data.bounds.x, line_data.bounds.w);
+				return coords;
+			}
 
 			void main() {
-				vec2 ray_src = in_coords * vec2(line_data.width, line_data.height);
+				// Set ray length to the max possible distance.
+				float ray_len = sqrt(
+					pow(float(line_data.width) / line_data.scaler, 2)
+						+ pow(float(line_data.height) / line_data.scaler, 2)
+				);
+				
 				uint filled = 0;
 				
 				for(uint i = 0; i < sample_data.samples; i++) {
-					if(is_filled(ray_src + sample_data.offsets[i].xy)) {
+					if(is_filled(transform_coords(in_coords, i), ray_len)) {
 						filled++;
 					}
 				}

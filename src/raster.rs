@@ -96,8 +96,8 @@ impl ImtRaster {
 		for x in 0..w {
 			for y in 0..w {
 				sample_data.offsets[i] = [
-					x as f32 / (w as f32 - 1.0),
-					y as f32 / (w as f32 - 1.0),
+					((x as f32 / (w as f32 - 1.0)) - 0.5) * 2.0,
+					((y as f32 / (w as f32 - 1.0)) - 0.5) * 2.0,
 					0.0, 0.0
 				]; i += 1;
 			}

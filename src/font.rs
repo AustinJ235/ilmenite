@@ -108,7 +108,7 @@ impl ImtFont {
 			
 			for x in 0..(g.bitmap.width as usize) {
 				for y in 0..(g.bitmap.height as usize) {
-					bitmap[(g.bitmap.width as usize * (g.bitmap.height as usize - 1 - y)) + x] = g.bitmap.data[x][y];
+					bitmap[(g.bitmap.width as usize * y) + x] = g.bitmap.data[x][y];
 				}
 			}
 		

@@ -32,25 +32,48 @@ pub struct ImtGlyphBitmap {
 	pub bearing_y: f32,
 	pub data: Vec<Vec<f32>>,
 	lines: Vec<(ImtPoint, ImtPoint)>,
-	min_x: f32,
-	min_y: f32,
-	max_x: f32,
-	max_y: f32,
 	scaler: f32,
+	pixel_align_offset_x: f32,
+	pixel_align_offset_y: f32,
+}
+
+fn expand_round(val: f32, direction: bool) -> f32 {
+	if direction {
+		if val.is_sign_positive() {
+			val.ceil() + 1.0
+		} else {
+			val.trunc() + 1.0
+		}
+	} else {
+		if val.is_sign_positive() {
+			val.trunc() - 1.0
+		} else {
+			val.ceil() - 1.0
+		}
+	}
 }
 
 impl ImtGlyphBitmap {
 	pub fn new(parser: &mut ImtParser, parsed: Arc<ImtParsedGlyph>, text_height: f32) -> ImtGlyphBitmap {
-		let scaler = parser.font_props.scaler * text_height;
-		let ascender = parser.font_props.ascender * scaler;
-		let min_x = parsed.min_x * scaler;
-		let min_y = parsed.min_y * scaler;
-		let max_x = parsed.max_x * scaler;
-		let max_y = parsed.max_y * scaler;
-		let bearing_x = min_x - 1.0;
-		let bearing_y = ascender - max_y.floor() - 1.0;
-		let width = (max_x.ceil() - min_x.ceil()) as u32 + 2;
-		let height = (max_y.ceil() -min_y.ceil()) as u32 + 2;
+		let font_props = parser.font_props();
+		let scaler = font_props.scaler * text_height;
+		let mut bearing_x = parsed.min_x * scaler;
+		let mut bearing_y = (font_props.ascender - parsed.max_y) * scaler;
+		
+		let pixel_align_offset_x = (bearing_x.round() - bearing_x)
+			+ expand_round(parsed.min_x * scaler, false) - (parsed.min_x * scaler);
+		let pixel_align_offset_y = (bearing_y.round() - bearing_y)
+			+ expand_round(parsed.max_y * scaler, true) - (parsed.max_y * scaler);
+			
+		bearing_x = bearing_x.round();
+		bearing_y = bearing_y.round();
+		
+		println!("1");
+		
+		let height = (expand_round(parsed.max_y * scaler, false) - expand_round(parsed.min_y * scaler, true)) as u32;
+		let width = (expand_round(parsed.max_x * scaler, false) - expand_round(parsed.min_x * scaler, true)) as u32;
+		
+		println!("2");
 		
 		let mut data = Vec::with_capacity(width as usize);
 		data.resize_with(width as usize, || {
@@ -67,10 +90,8 @@ impl ImtGlyphBitmap {
 			bearing_y,
 			data,
 			lines: Vec::new(),
-			min_x,
-			min_y,
-			max_x,
-			max_y,
+			pixel_align_offset_x,
+			pixel_align_offset_y,
 			scaler,
 		}
 	}
@@ -83,17 +104,21 @@ impl ImtGlyphBitmap {
 		let mut line_data = glyph_base_fs::ty::LineData {
 			lines: [[0.0; 4]; 1024],
 			count: 0,
-			width: self.width as f32,
-			height: self.height as f32,
+			width: self.width,
+			height: self.height,
+			bounds: [self.parsed.min_x, self.parsed.max_x, self.parsed.min_y, self.parsed.max_y],
+			pixel_align_offset: [self.pixel_align_offset_x, self.pixel_align_offset_y, 0.0, 0.0],
+			scaler: self.scaler,
+			_dummy0: [0; 4],
 		};
 		
 		for (pt_a, pt_b) in &self.lines {
 			let i = line_data.count;
 			line_data.lines[i as usize] = [
-				pt_a.x - self.min_x + (self.min_x.ceil() - self.min_x) + 1.0,
-				pt_a.y - self.min_y + (self.min_y.ceil() - self.min_y) + 1.0,
-				pt_b.x - self.min_x + (self.min_x.ceil() - self.min_x) + 1.0,
-				pt_b.y - self.min_y + (self.min_y.ceil() - self.min_y) + 1.0
+				pt_a.x,
+				pt_a.y,
+				pt_b.x,
+				pt_b.y
 			];
 			line_data.count += 1;
 		}
@@ -290,12 +315,12 @@ impl ImtGlyphBitmap {
 	) {
 		self.lines.push((
 			ImtPoint {
-				x: point_a.x * self.scaler,
-				y: point_a.y * self.scaler
+				x: point_a.x,
+				y: point_a.y
 			},
 			ImtPoint {
-				x: point_b.x * self.scaler,
-				y: point_b.y * self.scaler,
+				x: point_b.x,
+				y: point_b.y,
 			}
 		));
 	}
