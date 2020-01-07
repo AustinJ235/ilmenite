@@ -63,17 +63,13 @@ impl ImtGlyphBitmap {
 		let pixel_align_offset_x = (bearing_x.round() - bearing_x)
 			+ expand_round(parsed.min_x * scaler, false) - (parsed.min_x * scaler);
 		let pixel_align_offset_y = (bearing_y.round() - bearing_y)
-			+ expand_round(parsed.max_y * scaler, true) - (parsed.max_y * scaler);
+			- expand_round(parsed.max_y * scaler, true) + (parsed.max_y * scaler);
 			
 		bearing_x = bearing_x.round();
 		bearing_y = bearing_y.round();
 		
-		println!("1");
-		
-		let height = (expand_round(parsed.max_y * scaler, false) - expand_round(parsed.min_y * scaler, true)) as u32;
-		let width = (expand_round(parsed.max_x * scaler, false) - expand_round(parsed.min_x * scaler, true)) as u32;
-		
-		println!("2");
+		let height = (expand_round(parsed.max_y * scaler, true) - expand_round(parsed.min_y * scaler, false)) as u32;
+		let width = (expand_round(parsed.max_x * scaler, true) - expand_round(parsed.min_x * scaler, false)) as u32;
 		
 		let mut data = Vec::with_capacity(width as usize);
 		data.resize_with(width as usize, || {
