@@ -86,8 +86,8 @@ impl ImtRaster {
 		).unwrap();
 		
 		let mut sample_data = glyph_base_fs::ty::SampleData {
-			offsets: [[0.0; 4]; 25],
-			samples: 25,
+			offsets: [[0.0; 4]; 16],
+			samples: 16,
 		};
 		
 		let w = (sample_data.samples as f32).sqrt() as usize;
@@ -113,8 +113,8 @@ impl ImtRaster {
 		).unwrap();
 		
 		let mut ray_data = glyph_base_fs::ty::RayData {
-			dir: [[0.0; 4]; 4],
-			count: 4,
+			dir: [[0.0; 4]; 5],
+			count: 5,
 		};
 		
 		for i in 0..ray_data.dir.len() {

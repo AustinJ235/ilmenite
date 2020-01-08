@@ -18,12 +18,12 @@ pub mod glyph_base_fs {
 			} line_data;
 			
 			layout(set = 0, binding = 1) uniform SampleData {
-				vec4 offsets[25];
+				vec4 offsets[16];
 				uint samples;
 			} sample_data;
 			
 			layout(set = 0, binding = 2) uniform RayData {
-				vec4 dir[4];
+				vec4 dir[5];
 				uint count;
 			} ray_data;
 			
