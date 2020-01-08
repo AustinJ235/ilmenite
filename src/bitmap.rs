@@ -63,7 +63,7 @@ impl ImtGlyphBitmap {
 		let pixel_align_offset_x = (bearing_x.round() - bearing_x)
 			+ expand_round(parsed.min_x * scaler, false) - (parsed.min_x * scaler);
 		let pixel_align_offset_y = (bearing_y.round() - bearing_y)
-			- expand_round(parsed.max_y * scaler, true) + (parsed.max_y * scaler);
+			- expand_round(parsed.min_y * scaler, true) + (parsed.min_y * scaler);
 			
 		bearing_x = bearing_x.round();
 		bearing_y = bearing_y.round();

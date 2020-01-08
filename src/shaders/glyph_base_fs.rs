@@ -18,7 +18,7 @@ pub mod glyph_base_fs {
 			} line_data;
 			
 			layout(set = 0, binding = 1) uniform SampleData {
-				vec4 offsets[16];
+				vec4 offsets[25];
 				uint samples;
 			} sample_data;
 			
