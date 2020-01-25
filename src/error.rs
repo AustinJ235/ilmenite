@@ -26,6 +26,7 @@ pub enum ImtErrorSrc {
 	Bitmap,
 	Vhea,
 	Ilmenite,
+	Shaper,
 }
 
 #[derive(Clone,Debug,PartialEq)]

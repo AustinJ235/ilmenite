@@ -96,7 +96,6 @@ impl ImtShaper {
 		opts: ImtShapeOpts,
 		glyphs: Vec<Arc<ImtParsedGlyph>>
 	) -> Result<Vec<ImtShapedGlyph>, ImtError> {
-	
 		let font_props = parser.font_props();
 		let mut imt_shaped_glyphs: Vec<ImtShapedGlyph> = Vec::new();
 		let mut raw_glyphs = Vec::new();
@@ -183,6 +182,10 @@ impl ImtShaper {
 				
 				if let &ImtTextWrap::NewLine = &opts.text_wrap {
 					if lmaxx * font_props.scaler * opts.text_height > opts.body_width {
+						if x == 0.0 {
+							return Err(ImtError::src_and_ty(ImtErrorSrc::Shaper, ImtErrorTy::Other(format!("Body width too small."))));
+						}
+						
 						lines.push((shape_from, i + shape_from, line_max_x));
 						shape_from += i;
 						y += vert_adv;

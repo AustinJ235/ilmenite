@@ -171,7 +171,7 @@ impl ImtGlyphBitmap {
 				.build(raster.device.clone()).unwrap()
 		);
 		
-		let p1_set = PersistentDescriptorSet::start(p1_pipeline.clone(), 0)
+		let p1_set = PersistentDescriptorSet::start(p1_pipeline.layout().descriptor_set_layout(0).unwrap().clone())
 			.add_buffer(line_data_buf.clone()).unwrap()
 			.add_buffer(raster.sample_data_buf.clone()).unwrap()
 			.add_buffer(raster.ray_data_buf.clone()).unwrap()
@@ -234,7 +234,7 @@ impl ImtGlyphBitmap {
 				.build().unwrap()
 		);
 		
-		let p2_set = PersistentDescriptorSet::start(p2_pipeline.clone(), 0)
+		let p2_set = PersistentDescriptorSet::start(p2_pipeline.layout().descriptor_set_layout(0).unwrap().clone())
 			.add_sampled_image(p1_out_image.clone(), raster.sampler.clone()).unwrap()
 			.build().unwrap();
 			
