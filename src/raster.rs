@@ -75,6 +75,7 @@ impl ImtRaster {
 				vertex_buffer: true,
 				.. BufferUsage::none()
 			},
+            false,
 			[
 				ImtShaderVert { position: [-1.0, -1.0] },
 				ImtShaderVert { position: [1.0, -1.0] },
@@ -109,6 +110,7 @@ impl ImtRaster {
 				uniform_buffer: true,
 				.. BufferUsage::none()
 			},
+            false,
 			sample_data
 		).unwrap();
 		
@@ -128,6 +130,7 @@ impl ImtRaster {
 				uniform_buffer: true,
 				.. BufferUsage::none()
 			},
+            false,
 			ray_data
 		).unwrap();
 		

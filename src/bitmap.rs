@@ -122,6 +122,7 @@ impl ImtGlyphBitmap {
 		let line_data_buf = CpuAccessibleBuffer::from_data(
 			raster.device.clone(),
 			BufferUsage::all(), // TODO: Specific Usage
+            false,
 			line_data
 		).unwrap();
 		
@@ -241,6 +242,7 @@ impl ImtGlyphBitmap {
 		let buffer_out = CpuAccessibleBuffer::from_iter(
 			raster.device.clone(),
 			BufferUsage::all(),
+            false,
 			(0 .. self.width * self.height).map(|_| 0u8)
 		).unwrap();
 			

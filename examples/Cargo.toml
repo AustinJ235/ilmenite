@@ -9,4 +9,3 @@ basalt = { path = "../../basalt" }
 
 [patch.'https://github.com/austinj235/ilmenite']
 ilmenite = { path = "../" }
-

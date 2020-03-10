@@ -13,7 +13,7 @@ pub mod shape;
 pub mod raster;
 pub mod bitmap;
 pub mod font;
-mod shaders;
+pub mod shaders;
 
 pub use error::ImtError;
 pub use error::ImtErrorTy;
