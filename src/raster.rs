@@ -11,6 +11,8 @@ use vulkano::{
 	sampler::Sampler,
 };
 
+use parking_lot::Mutex;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtFillQuality {
 	Fast,
@@ -57,7 +59,7 @@ pub struct ImtRaster {
 	pub(crate) sample_data_buf: Arc<CpuAccessibleBuffer<glyph_base_fs::ty::SampleData>>,
 	pub(crate) ray_data_buf: Arc<CpuAccessibleBuffer<glyph_base_fs::ty::RayData>>,
 	pub(crate) sampler: Arc<Sampler>,
-	rastered_glyphs: BTreeMap<OrderedFloat<f32>, BTreeMap<u16, Arc<ImtGlyphBitmap>>>,
+	rastered_glyphs: Mutex<BTreeMap<OrderedFloat<f32>, BTreeMap<u16, Arc<ImtGlyphBitmap>>>>,
 }
 
 impl ImtRaster {
@@ -187,21 +189,21 @@ impl ImtRaster {
 			sampler,
 			sample_data_buf,
 			ray_data_buf,
-			rastered_glyphs: BTreeMap::new(),
+			rastered_glyphs: Mutex::new(BTreeMap::new()),
 		})
 	}
 
 	pub fn raster_shaped_glyphs(
-		&mut self,
-		parser: &mut ImtParser,
+		&self,
+		parser: &ImtParser,
 		text_height: f32,
 		shaped_glyphs: Vec<ImtShapedGlyph>,
 	) -> Result<Vec<ImtRasteredGlyph>, ImtError> {
-		let bitmap_cache = unsafe { &mut *(self as *mut Self) }
-			.rastered_glyphs
+		let mut rastered_glyphs = self.rastered_glyphs.lock();
+		let bitmap_cache = rastered_glyphs
 			.entry(OrderedFloat::from(text_height))
 			.or_insert_with(|| BTreeMap::new());
-		let mut rastered_glyphs = Vec::new();
+		let mut rastered_glyphs_out = Vec::new();
 
 		for shaped in shaped_glyphs {
 			let index = shaped.parsed.inner.glyph_index.unwrap();
@@ -217,12 +219,12 @@ impl ImtRaster {
 
 			let bitmap = bitmap_cache.get(&index).unwrap().clone();
 
-			rastered_glyphs.push(ImtRasteredGlyph {
+			rastered_glyphs_out.push(ImtRasteredGlyph {
 				shaped,
 				bitmap,
 			});
 		}
 
-		Ok(rastered_glyphs)
+		Ok(rastered_glyphs_out)
 	}
 }

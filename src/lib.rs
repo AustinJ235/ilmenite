@@ -2,6 +2,7 @@ extern crate vulkano;
 #[macro_use]
 extern crate vulkano_shaders;
 extern crate allsorts;
+extern crate crossbeam;
 extern crate ordered_float;
 extern crate parking_lot;
 
@@ -30,7 +31,7 @@ pub use shape::{
 pub(crate) use font::ImtFontKey;
 pub(crate) use primative::ImtShaderVert;
 
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use std::collections::HashMap;
 
 pub struct ImtGlyph {
@@ -47,19 +48,19 @@ pub struct ImtGlyph {
 }
 
 pub struct Ilmenite {
-	fonts: Mutex<HashMap<ImtFontKey, ImtFont>>,
+	fonts: RwLock<HashMap<ImtFontKey, ImtFont>>,
 }
 
 impl Ilmenite {
 	pub fn new() -> Self {
 		Ilmenite {
-			fonts: Mutex::new(HashMap::new()),
+			fonts: RwLock::new(HashMap::new()),
 		}
 	}
 
 	pub fn add_font(&self, font: ImtFont) {
 		let key = font.key();
-		self.fonts.lock().insert(key, font);
+		self.fonts.write().insert(key, font);
 	}
 
 	pub fn glyphs_for_text<T: AsRef<str>>(
@@ -71,8 +72,8 @@ impl Ilmenite {
 		text: T,
 	) -> Result<Vec<ImtGlyph>, ImtError> {
 		self.fonts
-			.lock()
-			.get_mut(&ImtFontKey {
+			.read()
+			.get(&ImtFontKey {
 				family,
 				weight,
 			})

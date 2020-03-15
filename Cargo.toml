@@ -16,6 +16,7 @@ edition = "2018"
 [dependencies]
 vulkano = "0.18.0"
 vulkano-shaders = "0.18.0"
-allsorts = "0.1.0"
+allsorts = "0.3.0"
 ordered-float = "1.0.2"
 parking_lot = "0.10.0"
+crossbeam = "0.7.3"

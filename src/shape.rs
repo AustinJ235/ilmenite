@@ -3,8 +3,8 @@ use crate::{
 	ImtScript,
 };
 
-use allsorts::gpos::{gpos_apply, Info, Placement};
-use std::{rc::Rc, sync::Arc};
+use allsorts::gpos::Placement;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtVertAlign {
@@ -81,7 +81,7 @@ impl ImtShaper {
 
 	pub fn shape_parsed_glyphs(
 		&self,
-		parser: &mut ImtParser,
+		parser: &ImtParser,
 		script: ImtScript,
 		lang: ImtLang,
 		opts: ImtShapeOpts,
@@ -113,27 +113,8 @@ impl ImtShaper {
 		let mut lines: Vec<(usize, usize, f32)> = Vec::new();
 
 		'line: loop {
-			let mut infos = Info::init_from_glyphs(
-				parser.gdef_op.as_ref(),
-				raw_glyphs[shape_from..].to_vec(),
-			)
-			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GsubInfo, e))?;
-
-			if let Some(gpos) = parser.gpos_op.take() {
-				let gpos_rc = Rc::new(gpos);
-
-				gpos_apply(
-					&gpos_rc,
-					parser.gdef_op.as_ref(),
-					true,
-					script.tag(),
-					lang.tag(),
-					&mut infos,
-				)
-				.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GPOS, e))?;
-
-				parser.gpos_op = Some(Rc::try_unwrap(gpos_rc).ok().unwrap());
-			}
+			let infos =
+				parser.retreive_info(raw_glyphs[shape_from..].to_vec(), script, lang)?;
 
 			let mut x: f32 = 0.0;
 			let mut x_offset = 0.0;
@@ -160,16 +141,6 @@ impl ImtShaper {
 				if x == 0.0 {
 					x_offset = imt_shaped_glyphs[i].parsed.min_x;
 				}
-
-				let glyph_index = info.glyph.glyph_index.ok_or(ImtError::src_and_ty(
-					ImtErrorSrc::Glyph,
-					ImtErrorTy::MissingIndex,
-				))?;
-				let hori_adv = parser
-					.hmtx
-					.horizontal_advance(glyph_index, parser.hhea.num_h_metrics)
-					.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Glyph, e))?
-					as f32;
 
 				let (glyph_x, glyph_y) = match info.placement {
 					Placement::Distance(dist_x, dist_y) => {
@@ -205,7 +176,7 @@ impl ImtShaper {
 					y: glyph_y,
 				};
 
-				x += hori_adv;
+				x += imt_shaped_glyphs[shape_from + i].parsed.hori_adv;
 			}
 
 			lines.push((shape_from, shape_from + infos_len, line_max_x));
@@ -340,9 +311,6 @@ impl ImtShaper {
 					let space_px =
 						opts.body_width - (*width * font_props.scaler * opts.text_height);
 					let space_font_units = space_px / (font_props.scaler * opts.text_height);
-
-					// println!("{} {} {} {}", space_px, space_font_units, opts.body_width,
-					// *width * (font_props.scaler * opts.text_height));
 					let shift = space_font_units * hori_align_scaler;
 
 					for i in *start..*end {
@@ -354,7 +322,6 @@ impl ImtShaper {
 
 		// Remove New Line Characters
 		imt_shaped_glyphs.retain(|g| g.parsed.inner.unicodes[0] != '\n');
-
 		Ok(imt_shaped_glyphs)
 	}
 }

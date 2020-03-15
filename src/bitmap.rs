@@ -47,7 +47,7 @@ fn expand_round(val: f32, direction: bool) -> f32 {
 
 impl ImtGlyphBitmap {
 	pub fn new(
-		parser: &mut ImtParser,
+		parser: &ImtParser,
 		parsed: Arc<ImtParsedGlyph>,
 		text_height: f32,
 	) -> ImtGlyphBitmap {

@@ -3,6 +3,7 @@ use crate::{ImtError, ImtErrorSrc, ImtErrorTy, ImtGeometry, ImtLang, ImtPoint, I
 use allsorts::{
 	binary::read::ReadScope,
 	font_data_impl::read_cmap_subtable,
+	gpos::{gpos_apply, Info},
 	gsub::{gsub_apply_default, GlyphOrigin, RawGlyph},
 	layout::{new_layout_cache, GDEFTable, LayoutCache, LayoutTable, GPOS, GSUB},
 	tables::{
@@ -13,23 +14,167 @@ use allsorts::{
 	},
 	tag,
 };
-use std::{collections::BTreeMap, sync::Arc};
+use crossbeam::{
+	queue::SegQueue,
+	sync::{Parker, Unparker},
+};
+use parking_lot::{Condvar, Mutex};
+use std::{
+	collections::BTreeMap,
+	rc::Rc,
+	sync::{
+		atomic::{self, AtomicBool},
+		Arc,
+	},
+	thread::{self, JoinHandle},
+};
 
-unsafe impl Send for ImtParser {}
+struct ParserReqRes<T> {
+	cond: Condvar,
+	result: Mutex<Option<Result<T, ImtError>>>,
+}
 
-// --- WARNING ABOUT SEND IMPLEMENTATION ----------------------------------------
-// From my understanding of the allsorts library and how it is used in this
-// this library it is safe to force impl Send for this struct. As long as
-// the following conditions are met:
-// -	Only one thread at time can access fields be it for read or writes.
-// Fields which are public are only public to this crate.
-// -	All data used from the parser does not contain any references or
-// Rc's from the parser. All data created from this parser are owned or
-// is thread safe.
-// --------------------------------------------------------------------------------
+impl<T> ParserReqRes<T> {
+	fn new() -> Arc<Self> {
+		Arc::new(ParserReqRes {
+			cond: Condvar::new(),
+			result: Mutex::new(None),
+		})
+	}
+
+	fn get(&self) -> Result<T, ImtError> {
+		let mut result = self.result.lock();
+
+		while result.is_none() {
+			self.cond.wait(&mut result);
+		}
+
+		result.take().unwrap()
+	}
+
+	fn set(&self, res: Result<T, ImtError>) {
+		*self.result.lock() = Some(res);
+		self.cond.notify_one();
+	}
+}
+
+enum ParserReq {
+	FontProps(Arc<ParserReqRes<ImtFontProps>>),
+	RetrieveText(Arc<ParserReqRes<Vec<Arc<ImtParsedGlyph>>>>, String, ImtScript, ImtLang),
+	RetrieveInfo(Arc<ParserReqRes<Vec<Info>>>, Vec<RawGlyph<()>>, ImtScript, ImtLang),
+}
+
+pub struct ImtParser {
+	worker: Option<JoinHandle<()>>,
+	requests: Arc<SegQueue<ParserReq>>,
+	unparker: Unparker,
+	dropped: Arc<AtomicBool>,
+}
+
+impl ImtParser {
+	pub fn new(bytes: Vec<u8>) -> Result<Self, ImtError> {
+		let requests_orig = Arc::new(SegQueue::new());
+		let requests = requests_orig.clone();
+		let result_orig: Arc<ParserReqRes<()>> = ParserReqRes::new();
+		let result = result_orig.clone();
+		let parker = Parker::new();
+		let unparker = parker.unparker().clone();
+		let dropped_orig = Arc::new(AtomicBool::new(false));
+		let dropped = dropped_orig.clone();
+
+		let worker = Some(thread::spawn(move || {
+			let mut parser = match ImtParserInner::new(bytes) {
+				Ok(ok) => {
+					result.set(Ok(()));
+					ok
+				},
+				Err(e) => {
+					result.set(Err(e));
+					return;
+				},
+			};
+
+			loop {
+				if dropped.load(atomic::Ordering::SeqCst) {
+					return;
+				}
+
+				while let Ok(req) = requests.pop() {
+					match req {
+						ParserReq::FontProps(res) => res.set(Ok(parser.font_props())),
+						ParserReq::RetrieveText(res, text, script, lang) => {
+							res.set(parser.retreive_text(text, script, lang));
+						},
+						ParserReq::RetrieveInfo(res, glyphs, script, lang) => {
+							res.set(parser.retreive_info(glyphs, script, lang));
+						},
+					}
+				}
+
+				parker.park();
+			}
+		}));
+
+		result_orig.get()?;
+
+		Ok(ImtParser {
+			worker,
+			requests: requests_orig,
+			unparker,
+			dropped: dropped_orig,
+		})
+	}
+
+	pub fn font_props(&self) -> ImtFontProps {
+		let res = ParserReqRes::new();
+		self.requests.push(ParserReq::FontProps(res.clone()));
+		self.unparker.unpark();
+		res.get().unwrap()
+	}
+
+	pub fn retreive_text<T: AsRef<str>>(
+		&self,
+		text: T,
+		script: ImtScript,
+		lang: ImtLang,
+	) -> Result<Vec<Arc<ImtParsedGlyph>>, ImtError> {
+		let res = ParserReqRes::new();
+		self.requests.push(ParserReq::RetrieveText(
+			res.clone(),
+			String::from(text.as_ref()),
+			script,
+			lang,
+		));
+		self.unparker.unpark();
+		res.get()
+	}
+
+	pub fn retreive_info(
+		&self,
+		raw_glyphs: Vec<RawGlyph<()>>,
+		script: ImtScript,
+		lang: ImtLang,
+	) -> Result<Vec<Info>, ImtError> {
+		let res = ParserReqRes::new();
+		self.requests.push(ParserReq::RetrieveInfo(res.clone(), raw_glyphs, script, lang));
+		self.unparker.unpark();
+		res.get()
+	}
+}
+
+impl Drop for ImtParser {
+	fn drop(&mut self) {
+		self.dropped.store(true, atomic::Ordering::SeqCst);
+		self.unparker.unpark();
+
+		if let Some(worker) = self.worker.take() {
+			worker.join().unwrap();
+		}
+	}
+}
 
 #[allow(dead_code)]
-pub struct ImtParser {
+pub struct ImtParserInner {
 	bytes: Vec<u8>,
 	scope: ReadScope<'static>,
 	pub(crate) head: HeadTable,
@@ -61,10 +206,11 @@ pub struct ImtParsedGlyph {
 	pub min_y: f32,
 	pub max_x: f32,
 	pub max_y: f32,
+	pub hori_adv: f32,
 	pub geometry: Vec<ImtGeometry>,
 }
 
-impl ImtParser {
+impl ImtParserInner {
 	pub fn new(bytes: Vec<u8>) -> Result<Self, ImtError> {
 		let OpenTypeFile {
 			scope,
@@ -196,7 +342,7 @@ impl ImtParser {
 			line_gap,
 		};
 
-		Ok(ImtParser {
+		Ok(ImtParserInner {
 			parsed_glyphs: BTreeMap::new(),
 			bytes,
 			scope,
@@ -217,6 +363,34 @@ impl ImtParser {
 
 	pub fn font_props(&mut self) -> ImtFontProps {
 		self.font_props.clone()
+	}
+
+	pub fn retreive_info(
+		&mut self,
+		raw_glyphs: Vec<RawGlyph<()>>,
+		script: ImtScript,
+		lang: ImtLang,
+	) -> Result<Vec<Info>, ImtError> {
+		let mut infos = Info::init_from_glyphs(self.gdef_op.as_ref(), raw_glyphs)
+			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GsubInfo, e))?;
+
+		if let Some(gpos) = self.gpos_op.take() {
+			let gpos_rc = Rc::new(gpos);
+
+			gpos_apply(
+				&gpos_rc,
+				self.gdef_op.as_ref(),
+				true,
+				script.tag(),
+				lang.tag(),
+				&mut infos,
+			)
+			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GPOS, e))?;
+
+			self.gpos_op = Some(Rc::try_unwrap(gpos_rc).ok().unwrap());
+		}
+
+		Ok(infos)
 	}
 
 	fn glyph_for_char(&mut self, c: char) -> Result<RawGlyph<()>, ImtError> {
@@ -458,6 +632,11 @@ impl ImtParser {
 					};
 				}
 
+				let hori_adv =
+					self.hmtx
+						.horizontal_advance(index, self.hhea.num_h_metrics)
+						.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Glyph, e))? as f32;
+
 				self.parsed_glyphs.insert(
 					index,
 					Arc::new(ImtParsedGlyph {
@@ -466,6 +645,7 @@ impl ImtParser {
 						min_y: min_y.unwrap_or(0.0),
 						max_x: max_x.unwrap_or(0.0),
 						max_y: max_y.unwrap_or(0.0),
+						hori_adv,
 						geometry,
 					}),
 				);
