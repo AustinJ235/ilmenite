@@ -2,7 +2,6 @@ use crate::{
 	ImtError, ImtErrorSrc, ImtErrorTy, ImtLang, ImtParsedGlyph, ImtParser, ImtPosition,
 	ImtScript,
 };
-
 use allsorts::gpos::Placement;
 use std::sync::Arc;
 

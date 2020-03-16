@@ -7,33 +7,33 @@ pub mod glyph_cs {
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) buffer SampleData {
-	vec4 offset[];
+	highp vec4 offset[];
 } samples;
 
 layout(set = 0, binding = 1) buffer RayData {
-	vec4 direction[];
+	highp vec4 direction[];
 } rays;
 
 layout(set = 0, binding = 2) buffer LineData {
-	vec4 point[];
+	highp vec4 point[];
 } lines;
 
 layout(set = 0, binding = 3) buffer BitmapData {
-	float data[];
+	highp float data[];
 } bitmap;
 
 layout(set = 0, binding = 4) buffer GlyphData {
 	uint samples;
 	uint rays;
 	uint lines;
-	float scaler;
+	highp float scaler;
 	uint width;
 	uint height;
-	vec4 offset;
-	vec4 bounds;
+	highp vec4 offset;
+	highp vec4 bounds;
 } glyph;
 
-int ccw(vec2 p0, vec2 p1, vec2 p2) {
+int ccw(highp vec2 p0, highp vec2 p1, highp vec2 p2) {
 	float dx1 = p1.x - p0.x;
 	float dy1 = p1.y - p0.y;
 	float dx2 = p2.x - p0.x;
@@ -58,16 +58,16 @@ int ccw(vec2 p0, vec2 p1, vec2 p2) {
 	return 0;
 }
 
-bool intersect(vec2 l1p1, vec2 l1p2, vec2 l2p1, vec2 l2p2) {
+bool intersect(highp vec2 l1p1, highp vec2 l1p2, highp vec2 l2p1, highp vec2 l2p2) {
 	return ccw(l1p1, l1p2, l2p1) * ccw(l1p1, l1p2, l2p2) <= 0
 			&& ccw(l2p1, l2p2, l1p1) * ccw(l2p1, l2p2, l1p2) <= 0;
 }
 
-bool is_filled(vec2 ray_src, float ray_len) {
+bool is_filled(highp vec2 ray_src, highp float ray_len) {
 	int least_hits = -1;
 	
 	for(uint ray_dir_i = 0; ray_dir_i < glyph.rays; ray_dir_i++) {
-		vec2 ray_dest = ray_src + (rays.direction[ray_dir_i].xy * ray_len);
+		highp vec2 ray_dest = ray_src + (rays.direction[ray_dir_i].xy * ray_len);
 		int hits = 0;
 		
 		for(uint line_i = 0; line_i < glyph.lines; line_i ++) {
@@ -84,8 +84,8 @@ bool is_filled(vec2 ray_src, float ray_len) {
 	return least_hits % 2 != 0;
 }
 
-vec2 transform_coords(uint offset_i) {
-	vec2 coords = vec2(float(gl_GlobalInvocationID.x), float(gl_GlobalInvocationID.y) * -1.0);
+highp vec2 transform_coords(uint offset_i) {
+	highp vec2 coords = vec2(float(gl_GlobalInvocationID.x), float(gl_GlobalInvocationID.y) * -1.0);
 	// Apply the pixel offset for sampling
 	coords += samples.offset[offset_i].xy;
 	// Bearings are rounded so image doesn't sit on pixel borders
@@ -99,7 +99,7 @@ vec2 transform_coords(uint offset_i) {
 
 void main() {
 	// Set ray length to the max possible distance.
-	float ray_len = sqrt(
+	highp float ray_len = sqrt(
 		pow(float(glyph.width) / glyph.scaler, 2)
 			+ pow(float(glyph.height) / glyph.scaler, 2)
 	);

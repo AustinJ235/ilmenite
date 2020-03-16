@@ -1,6 +1,7 @@
 use crate::{shaders::glyph_cs, ImtError, ImtGlyphBitmap, ImtParser, ImtShapedGlyph};
-
+use crossbeam::sync::{Parker, Unparker};
 use ordered_float::OrderedFloat;
+use parking_lot::Mutex;
 use std::{collections::BTreeMap, iter, sync::Arc};
 use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, device_local::DeviceLocalBuffer, BufferUsage},
@@ -8,8 +9,6 @@ use vulkano::{
 	device::{Device, Queue},
 	sync::GpuFuture,
 };
-
-use parking_lot::Mutex;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtFillQuality {
@@ -45,6 +44,13 @@ pub struct ImtRasteredGlyph {
 	pub bitmap: Arc<ImtGlyphBitmap>,
 }
 
+#[derive(Clone)]
+enum RasterCacheState {
+	Completed(Arc<ImtGlyphBitmap>),
+	Incomplete(Vec<Unparker>),
+	Errored(ImtError),
+}
+
 #[allow(dead_code)]
 pub struct ImtRaster {
 	opts: ImtRasterOps,
@@ -53,9 +59,9 @@ pub struct ImtRaster {
 	glyph_cs: glyph_cs::Shader,
 	sample_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
 	ray_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
-	rastered_glyphs: Mutex<BTreeMap<OrderedFloat<f32>, BTreeMap<u16, Arc<ImtGlyphBitmap>>>>,
 	sample_count: usize,
 	ray_count: usize,
+	cache: Mutex<BTreeMap<(OrderedFloat<f32>, u16), RasterCacheState>>,
 }
 
 impl ImtRaster {
@@ -99,8 +105,8 @@ impl ImtRaster {
 			.unwrap();
 
 		let ray_count = match &opts.fill_quality {
-			&ImtFillQuality::Fast => 5,
-			&ImtFillQuality::Normal => 9,
+			&ImtFillQuality::Fast => 3,
+			&ImtFillQuality::Normal => 5,
 			&ImtFillQuality::Best => 13,
 		};
 
@@ -174,7 +180,7 @@ impl ImtRaster {
 			ray_count,
 			sample_data_buf: sample_data_dev_buf,
 			ray_data_buf: ray_data_dev_buf,
-			rastered_glyphs: Mutex::new(BTreeMap::new()),
+			cache: Mutex::new(BTreeMap::new()),
 		})
 	}
 
@@ -214,35 +220,152 @@ impl ImtRaster {
 		self.ray_data_buf.clone()
 	}
 
+	#[allow(unused_assignments)]
 	pub fn raster_shaped_glyphs(
 		&self,
 		parser: &ImtParser,
 		text_height: f32,
 		shaped_glyphs: Vec<ImtShapedGlyph>,
 	) -> Result<Vec<ImtRasteredGlyph>, ImtError> {
-		let mut rastered_glyphs = self.rastered_glyphs.lock();
-		let bitmap_cache = rastered_glyphs
-			.entry(OrderedFloat::from(text_height))
-			.or_insert_with(|| BTreeMap::new());
 		let mut rastered_glyphs_out = Vec::new();
+		let mut cache_lk_op = None;
+		let height_key = OrderedFloat::from(text_height);
 
-		for shaped in shaped_glyphs {
+		'glyphs: for shaped in shaped_glyphs {
 			let index = shaped.parsed.inner.glyph_index.unwrap();
 
-			if bitmap_cache.get(&index).is_none() {
-				let mut bitmap =
-					ImtGlyphBitmap::new(parser, shaped.parsed.clone(), text_height);
-
-				bitmap.create_outline();
-				bitmap.raster(self)?;
-				bitmap_cache.insert(index, Arc::new(bitmap));
+			// Acquire a lock to the cache if it isn't already present
+			if cache_lk_op.is_none() {
+				cache_lk_op = Some(self.cache.lock());
 			}
 
-			let bitmap = bitmap_cache.get(&index).unwrap().clone();
+			let mut parker_op = None;
+
+			// Obtain the current cache state
+			if let Some(cache_state) =
+				cache_lk_op.as_mut().unwrap().get_mut(&(height_key, index))
+			{
+				match cache_state {
+					// This glyph has already be completed!
+					&mut RasterCacheState::Completed(ref bitmap) => {
+						rastered_glyphs_out.push(ImtRasteredGlyph {
+							shaped,
+							bitmap: bitmap.clone(),
+						});
+
+						continue;
+					},
+					// This glyph is currently in the progress of be rasterized. Add this
+					// thread's unparker so we can wait for it to complete.
+					&mut RasterCacheState::Incomplete(ref mut unparkers) => {
+						let parker = Parker::new();
+						unparkers.push(parker.unparker().clone());
+						parker_op = Some(parker);
+					},
+					// The last attempted seem'd to have error, try again why not.
+					&mut RasterCacheState::Errored(_) => (),
+				}
+			}
+
+			// Another thread is in the progress of rasterizing, so park.
+			if let Some(parker) = parker_op {
+				// Loop as the parker my spuriously wake up!
+				loop {
+					// Drop the lock to not hold things up.
+					cache_lk_op = None;
+					parker.park();
+
+					// Reobtain the lock
+					cache_lk_op = Some(self.cache.lock());
+
+					// Should be safe to unwrap as the state should already be present given
+					// the previous logic.
+					let cache_state =
+						cache_lk_op.as_ref().unwrap().get(&(height_key, index)).unwrap();
+
+					match cache_state {
+						// As expected the glyph is completed.
+						&RasterCacheState::Completed(ref bitmap) => {
+							rastered_glyphs_out.push(ImtRasteredGlyph {
+								shaped,
+								bitmap: bitmap.clone(),
+							});
+
+							continue 'glyphs;
+						},
+						// Seems this thread has spuriously woken up, go back to sleep.
+						&RasterCacheState::Incomplete(_) => continue,
+						// The last attempted seem'd to have error, try again why not.
+						&RasterCacheState::Errored(_) => break,
+					}
+				}
+			}
+
+			// Made it here, so assume that the glyph needs to be rasterized yet.
+
+			// The cache lock should still be held, but check.
+			if cache_lk_op.is_none() {
+				cache_lk_op = Some(self.cache.lock());
+			}
+
+			// Update the cache to inform it that this thread is going to rasterize the glyph.
+			cache_lk_op
+				.as_mut()
+				.unwrap()
+				.insert((height_key, index), RasterCacheState::Incomplete(Vec::new()));
+
+			// Drop the lock so other threads can keep doing things.
+			cache_lk_op = None;
+
+			let mut bitmap = ImtGlyphBitmap::new(parser, shaped.parsed.clone(), text_height);
+			bitmap.create_outline();
+
+			if let Err(e) = bitmap.raster(self) {
+				// Seems we have errored, up the cache and inform other threads.
+				// Reobtain the lock
+				cache_lk_op = Some(self.cache.lock());
+
+				// Update the state to errored and retrieve the old one.
+				let old_state = cache_lk_op
+					.as_mut()
+					.unwrap()
+					.insert((height_key, index), RasterCacheState::Errored(e.clone()));
+
+				// Inform all the other threads that may have been waiting.
+				if let Some(RasterCacheState::Incomplete(unparkers)) = old_state {
+					for unparker in unparkers {
+						unparker.unpark();
+					}
+				}
+
+				// Finally return the error
+				return Err(e);
+			}
+
+			// The glyph seems to have rastered sucessfully!
+
+			// Wrap the bitmap into its final form.
+			let bitmap = Arc::new(bitmap);
+
+			// Reobtain the lock
+			cache_lk_op = Some(self.cache.lock());
+
+			// Update the state to completed and retrieve the old one.
+			let old_state = cache_lk_op
+				.as_mut()
+				.unwrap()
+				.insert((height_key, index), RasterCacheState::Completed(bitmap.clone()));
+
+			// Inform all the other threads that may have been waiting.
+			if let Some(RasterCacheState::Incomplete(unparkers)) = old_state {
+				for unparker in unparkers {
+					unparker.unpark();
+				}
+			}
 
 			rastered_glyphs_out.push(ImtRasteredGlyph {
 				shaped,
-				bitmap,
+				bitmap: bitmap.clone(),
 			});
 		}
 
