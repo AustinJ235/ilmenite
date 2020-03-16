@@ -1,31 +1,29 @@
 //! ```rust
 //! let ilmenite = Ilmenite::new();
-//! 
-//! ilmenite.add_font(ImtFont::from_file(
-//! 	"MyFont",
-//! 	ImtWeight::Normal, 
-//! 	ImtRasterOps::default(),
-//! 	device,
-//! 	queue,
-//! 	"MyFont.ttf"
-//! ).unwrap());
-//! 
-//! let glyphs = ilmenite.glyphs_for_text(
-//! 	"MyFont",
-//! 	ImtWeight::Normal,
-//! 	12.0,
-//! 	None,
-//! 	"Hello World!"
-//! ).unwrap();
+//!
+//! ilmenite.add_font(
+//! 	ImtFont::from_file(
+//! 		"MyFont",
+//! 		ImtWeight::Normal,
+//! 		ImtRasterOps::default(),
+//! 		device,
+//! 		queue,
+//! 		"MyFont.ttf",
+//! 		)
+//! 	.unwrap(),
+//! 	);
+//!
+//! let glyphs = ilmenite
+//! 	.glyphs_for_text("MyFont", ImtWeight::Normal, 12.0, None, "Hello World!")
+//! 	.unwrap();
 //! ```
 
-extern crate vulkano;
-#[macro_use]
-extern crate vulkano_shaders;
 extern crate allsorts;
 extern crate crossbeam;
 extern crate ordered_float;
 extern crate parking_lot;
+extern crate vulkano;
+extern crate vulkano_shaders;
 
 pub mod bitmap;
 pub mod error;

@@ -1,18 +1,13 @@
-use crate::{
-	shaders::glyph_cs,
-	ImtError, ImtGlyphBitmap, ImtParser, ImtShapedGlyph,
-};
+use crate::{shaders::glyph_cs, ImtError, ImtGlyphBitmap, ImtParser, ImtShapedGlyph};
 
 use ordered_float::OrderedFloat;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, iter, sync::Arc};
 use vulkano::{
-	buffer::{cpu_access::CpuAccessibleBuffer, BufferUsage},
+	buffer::{cpu_access::CpuAccessibleBuffer, device_local::DeviceLocalBuffer, BufferUsage},
 	command_buffer::{AutoCommandBufferBuilder, CommandBuffer},
 	device::{Device, Queue},
 	sync::GpuFuture,
 };
-use vulkano::buffer::device_local::DeviceLocalBuffer;
-use std::iter;
 
 use parking_lot::Mutex;
 
@@ -39,8 +34,8 @@ pub struct ImtRasterOps {
 impl Default for ImtRasterOps {
 	fn default() -> Self {
 		ImtRasterOps {
-			fill_quality: ImtFillQuality::Fast,
-			sample_quality: ImtSampleQuality::Fast,
+			fill_quality: ImtFillQuality::Normal,
+			sample_quality: ImtSampleQuality::Normal,
 		}
 	}
 }
@@ -52,12 +47,12 @@ pub struct ImtRasteredGlyph {
 
 #[allow(dead_code)]
 pub struct ImtRaster {
-	pub(crate) opts: ImtRasterOps,
-	pub(crate) device: Arc<Device>,
-	pub(crate) queue: Arc<Queue>,
-	pub(crate) glyph_cs: glyph_cs::Shader,
-	pub(crate) sample_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
-	pub(crate) ray_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
+	opts: ImtRasterOps,
+	device: Arc<Device>,
+	queue: Arc<Queue>,
+	glyph_cs: glyph_cs::Shader,
+	sample_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
+	ray_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
 	rastered_glyphs: Mutex<BTreeMap<OrderedFloat<f32>, BTreeMap<u16, Arc<ImtGlyphBitmap>>>>,
 	sample_count: usize,
 	ray_count: usize,
@@ -75,7 +70,7 @@ impl ImtRaster {
 			ImtSampleQuality::Normal => 16,
 			ImtSampleQuality::Best => 25,
 		};
-		
+
 		let mut sample_data: Vec<[f32; 4]> = Vec::with_capacity(sample_count);
 		let w = (sample_count as f32).sqrt() as usize;
 
@@ -89,42 +84,46 @@ impl ImtRaster {
 				]);
 			}
 		}
-		
-		let sample_data_cpu_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
-			device.clone(),
-			BufferUsage {
-				storage_buffer: true,
-				transfer_source: true,
-				.. BufferUsage::none()
-			},
-			false,
-			sample_data.into_iter()
-		).unwrap();
-		
+
+		let sample_data_cpu_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> =
+			CpuAccessibleBuffer::from_iter(
+				device.clone(),
+				BufferUsage {
+					storage_buffer: true,
+					transfer_source: true,
+					..BufferUsage::none()
+				},
+				false,
+				sample_data.into_iter(),
+			)
+			.unwrap();
+
 		let ray_count = match &opts.fill_quality {
 			&ImtFillQuality::Fast => 5,
 			&ImtFillQuality::Normal => 9,
 			&ImtFillQuality::Best => 13,
 		};
-		
+
 		let mut ray_data: Vec<[f32; 4]> = Vec::with_capacity(ray_count);
 
 		for i in 0..ray_count {
 			let rad = (i as f32 * (360.0 / ray_count as f32)).to_radians();
 			ray_data.push([rad.cos(), rad.sin(), 0.0, 0.0]);
 		}
-		
-		let ray_data_cpu_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
-			device.clone(),
-			BufferUsage {
-				storage_buffer: true,
-				transfer_source: true,
-				.. BufferUsage::none()
-			},
-			false,
-			ray_data.into_iter()
-		).unwrap();
-		
+
+		let ray_data_cpu_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> =
+			CpuAccessibleBuffer::from_iter(
+				device.clone(),
+				BufferUsage {
+					storage_buffer: true,
+					transfer_source: true,
+					..BufferUsage::none()
+				},
+				false,
+				ray_data.into_iter(),
+			)
+			.unwrap();
+
 		let sample_data_dev_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>> = DeviceLocalBuffer::array(
 			device.clone(),
 			sample_count,
@@ -132,11 +131,12 @@ impl ImtRaster {
 				storage_buffer: true,
 				transfer_destination: true,
 				uniform_buffer: true,
-				.. BufferUsage::none()
+				..BufferUsage::none()
 			},
-			iter::once(queue.family())
-		).unwrap();
-		
+			iter::once(queue.family()),
+		)
+		.unwrap();
+
 		let ray_data_dev_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>> = DeviceLocalBuffer::array(
 			device.clone(),
 			ray_count,
@@ -144,15 +144,14 @@ impl ImtRaster {
 				storage_buffer: true,
 				transfer_destination: true,
 				uniform_buffer: true,
-				.. BufferUsage::none()
+				..BufferUsage::none()
 			},
-			iter::once(queue.family())
-		).unwrap();
-		
-		AutoCommandBufferBuilder::new(
-			device.clone(),
-			queue.family(),
-		).unwrap()
+			iter::once(queue.family()),
+		)
+		.unwrap();
+
+		AutoCommandBufferBuilder::new(device.clone(), queue.family())
+			.unwrap()
 			.copy_buffer(sample_data_cpu_buf.clone(), sample_data_dev_buf.clone())
 			.unwrap()
 			.copy_buffer(ray_data_cpu_buf.clone(), ray_data_dev_buf.clone())
@@ -165,7 +164,7 @@ impl ImtRaster {
 			.unwrap()
 			.wait(None)
 			.unwrap();
-		
+
 		Ok(ImtRaster {
 			device,
 			queue,
@@ -178,39 +177,39 @@ impl ImtRaster {
 			rastered_glyphs: Mutex::new(BTreeMap::new()),
 		})
 	}
-	
+
 	pub fn sample_count(&self) -> usize {
 		self.sample_count
 	}
-	
+
 	pub fn ray_count(&self) -> usize {
 		self.ray_count
 	}
-	
+
 	pub fn device(&self) -> Arc<Device> {
 		self.device.clone()
 	}
-	
+
 	pub fn device_ref(&self) -> &Arc<Device> {
 		&self.device
 	}
-	
+
 	pub fn queue(&self) -> Arc<Queue> {
 		self.queue.clone()
 	}
-	
+
 	pub fn queue_ref(&self) -> &Arc<Queue> {
 		&self.queue
 	}
-	
+
 	pub fn glyph_shader(&self) -> &glyph_cs::Shader {
 		&self.glyph_cs
 	}
-	
+
 	pub fn sample_data_buf(&self) -> Arc<DeviceLocalBuffer<[[f32; 4]]>> {
 		self.sample_data_buf.clone()
 	}
-	
+
 	pub fn ray_data_buf(&self) -> Arc<DeviceLocalBuffer<[[f32; 4]]>> {
 		self.ray_data_buf.clone()
 	}
