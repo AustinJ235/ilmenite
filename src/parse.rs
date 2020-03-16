@@ -83,7 +83,7 @@ impl ImtParser {
 		let dropped = dropped_orig.clone();
 
 		let worker = Some(thread::spawn(move || {
-			let mut parser = match ImtParserInner::new(bytes) {
+			let mut parser = match ImtParserNonSend::new(bytes) {
 				Ok(ok) => {
 					result.set(Ok(()));
 					ok
@@ -174,21 +174,21 @@ impl Drop for ImtParser {
 }
 
 #[allow(dead_code)]
-pub struct ImtParserInner {
+pub struct ImtParserNonSend {
 	bytes: Vec<u8>,
 	scope: ReadScope<'static>,
-	pub(crate) head: HeadTable,
-	pub(crate) maxp: MaxpTable,
-	pub(crate) cmap: Cmap<'static>,
-	pub(crate) cmap_sub: CmapSubtable<'static>,
-	pub(crate) hhea: HheaTable,
-	pub(crate) hmtx: HmtxTable<'static>,
-	pub(crate) loca: LocaTable<'static>,
-	pub(crate) glyf: GlyfTable<'static>,
-	pub(crate) gdef_op: Option<GDEFTable>,
-	pub(crate) gpos_op: Option<LayoutCache<GPOS>>,
-	pub(crate) gsub_op: Option<LayoutCache<GSUB>>,
-	pub(crate) font_props: ImtFontProps,
+	head: HeadTable,
+	maxp: MaxpTable,
+	cmap: Cmap<'static>,
+	cmap_sub: CmapSubtable<'static>,
+	hhea: HheaTable,
+	hmtx: HmtxTable<'static>,
+	loca: LocaTable<'static>,
+	glyf: GlyfTable<'static>,
+	gdef_op: Option<GDEFTable>,
+	gpos_op: Option<LayoutCache<GPOS>>,
+	gsub_op: Option<LayoutCache<GSUB>>,
+	font_props: ImtFontProps,
 	parsed_glyphs: BTreeMap<u16, Arc<ImtParsedGlyph>>,
 }
 
@@ -210,7 +210,7 @@ pub struct ImtParsedGlyph {
 	pub geometry: Vec<ImtGeometry>,
 }
 
-impl ImtParserInner {
+impl ImtParserNonSend {
 	pub fn new(bytes: Vec<u8>) -> Result<Self, ImtError> {
 		let OpenTypeFile {
 			scope,
@@ -342,7 +342,7 @@ impl ImtParserInner {
 			line_gap,
 		};
 
-		Ok(ImtParserInner {
+		Ok(ImtParserNonSend {
 			parsed_glyphs: BTreeMap::new(),
 			bytes,
 			scope,

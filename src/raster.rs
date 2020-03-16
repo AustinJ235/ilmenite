@@ -1,15 +1,18 @@
 use crate::{
-	shaders::{glyph_base_fs, glyph_post_fs, square_vs},
-	ImtError, ImtGlyphBitmap, ImtParser, ImtShaderVert, ImtShapedGlyph,
+	shaders::glyph_cs,
+	ImtError, ImtGlyphBitmap, ImtParser, ImtShapedGlyph,
 };
 
 use ordered_float::OrderedFloat;
 use std::{collections::BTreeMap, sync::Arc};
 use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, BufferUsage},
+	command_buffer::{AutoCommandBufferBuilder, CommandBuffer},
 	device::{Device, Queue},
-	sampler::Sampler,
+	sync::GpuFuture,
 };
+use vulkano::buffer::device_local::DeviceLocalBuffer;
+use std::iter;
 
 use parking_lot::Mutex;
 
@@ -52,14 +55,12 @@ pub struct ImtRaster {
 	pub(crate) opts: ImtRasterOps,
 	pub(crate) device: Arc<Device>,
 	pub(crate) queue: Arc<Queue>,
-	pub(crate) square_vs: square_vs::Shader,
-	pub(crate) glyph_base_fs: glyph_base_fs::Shader,
-	pub(crate) glyph_post_fs: glyph_post_fs::Shader,
-	pub(crate) square_buf: Arc<CpuAccessibleBuffer<[ImtShaderVert]>>,
-	pub(crate) sample_data_buf: Arc<CpuAccessibleBuffer<glyph_base_fs::ty::SampleData>>,
-	pub(crate) ray_data_buf: Arc<CpuAccessibleBuffer<glyph_base_fs::ty::RayData>>,
-	pub(crate) sampler: Arc<Sampler>,
+	pub(crate) glyph_cs: glyph_cs::Shader,
+	pub(crate) sample_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
+	pub(crate) ray_data_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>>,
 	rastered_glyphs: Mutex<BTreeMap<OrderedFloat<f32>, BTreeMap<u16, Arc<ImtGlyphBitmap>>>>,
+	sample_count: usize,
+	ray_count: usize,
 }
 
 impl ImtRaster {
@@ -68,129 +69,150 @@ impl ImtRaster {
 		queue: Arc<Queue>,
 		opts: ImtRasterOps,
 	) -> Result<Self, ImtError> {
-		let square_vs = square_vs::Shader::load(device.clone()).unwrap();
-		let glyph_base_fs = glyph_base_fs::Shader::load(device.clone()).unwrap();
-		let glyph_post_fs = glyph_post_fs::Shader::load(device.clone()).unwrap();
-
-		// TODO: Use DeviceLocalBuffer
-		let square_buf = CpuAccessibleBuffer::from_iter(
-			device.clone(),
-			BufferUsage {
-				vertex_buffer: true,
-				..BufferUsage::none()
-			},
-			false,
-			[
-				ImtShaderVert {
-					position: [-1.0, -1.0],
-				},
-				ImtShaderVert {
-					position: [1.0, -1.0],
-				},
-				ImtShaderVert {
-					position: [1.0, 1.0],
-				},
-				ImtShaderVert {
-					position: [1.0, 1.0],
-				},
-				ImtShaderVert {
-					position: [-1.0, 1.0],
-				},
-				ImtShaderVert {
-					position: [-1.0, -1.0],
-				},
-			]
-			.iter()
-			.cloned(),
-		)
-		.unwrap();
-
-		let mut sample_data = glyph_base_fs::ty::SampleData {
-			offsets: [[0.0; 4]; 16],
-			samples: 16,
+		let glyph_cs = glyph_cs::Shader::load(device.clone()).unwrap();
+		let sample_count = match &opts.sample_quality {
+			ImtSampleQuality::Fast => 9,
+			ImtSampleQuality::Normal => 16,
+			ImtSampleQuality::Best => 25,
 		};
-
-		let w = (sample_data.samples as f32).sqrt() as usize;
-		let mut i = 0_usize;
+		
+		let mut sample_data: Vec<[f32; 4]> = Vec::with_capacity(sample_count);
+		let w = (sample_count as f32).sqrt() as usize;
 
 		for x in 1..=w {
 			for y in 1..=w {
-				sample_data.offsets[i] = [
+				sample_data.push([
 					((x as f32 / (w as f32 + 1.0)) * 2.0) - 1.0,
 					((y as f32 / (w as f32 + 1.0)) * 2.0) - 1.0,
 					0.0,
 					0.0,
-				];
-				i += 1;
+				]);
 			}
 		}
-
-		let sample_data_buf = CpuAccessibleBuffer::from_data(
+		
+		let sample_data_cpu_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
 			device.clone(),
 			BufferUsage {
-				uniform_buffer: true,
-				..BufferUsage::none()
+				storage_buffer: true,
+				transfer_source: true,
+				.. BufferUsage::none()
 			},
 			false,
-			sample_data,
-		)
-		.unwrap();
-
-		let mut ray_data = glyph_base_fs::ty::RayData {
-			dir: [[0.0; 4]; 5],
-			count: 5,
+			sample_data.into_iter()
+		).unwrap();
+		
+		let ray_count = match &opts.fill_quality {
+			&ImtFillQuality::Fast => 5,
+			&ImtFillQuality::Normal => 9,
+			&ImtFillQuality::Best => 13,
 		};
+		
+		let mut ray_data: Vec<[f32; 4]> = Vec::with_capacity(ray_count);
 
-		for i in 0..ray_data.dir.len() {
-			let rad = (i as f32 * (360.0 / ray_data.dir.len() as f32)).to_radians();
-			ray_data.dir[i] = [rad.cos(), rad.sin(), 0.0, 0.0];
+		for i in 0..ray_count {
+			let rad = (i as f32 * (360.0 / ray_count as f32)).to_radians();
+			ray_data.push([rad.cos(), rad.sin(), 0.0, 0.0]);
 		}
-
-		let ray_data_buf = CpuAccessibleBuffer::from_data(
+		
+		let ray_data_cpu_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
 			device.clone(),
 			BufferUsage {
-				uniform_buffer: true,
-				..BufferUsage::none()
+				storage_buffer: true,
+				transfer_source: true,
+				.. BufferUsage::none()
 			},
 			false,
-			ray_data,
-		)
-		.unwrap();
-
-		let sampler = Sampler::new(
+			ray_data.into_iter()
+		).unwrap();
+		
+		let sample_data_dev_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>> = DeviceLocalBuffer::array(
 			device.clone(),
-			vulkano::sampler::Filter::Nearest,
-			vulkano::sampler::Filter::Nearest,
-			vulkano::sampler::MipmapMode::Nearest,
-			vulkano::sampler::SamplerAddressMode::ClampToBorder(
-				vulkano::sampler::BorderColor::IntTransparentBlack,
-			),
-			vulkano::sampler::SamplerAddressMode::ClampToBorder(
-				vulkano::sampler::BorderColor::IntTransparentBlack,
-			),
-			vulkano::sampler::SamplerAddressMode::ClampToBorder(
-				vulkano::sampler::BorderColor::IntTransparentBlack,
-			),
-			0.0,
-			1.0,
-			0.0,
-			1000.0,
-		)
-		.unwrap();
-
+			sample_count,
+			BufferUsage {
+				storage_buffer: true,
+				transfer_destination: true,
+				uniform_buffer: true,
+				.. BufferUsage::none()
+			},
+			iter::once(queue.family())
+		).unwrap();
+		
+		let ray_data_dev_buf: Arc<DeviceLocalBuffer<[[f32; 4]]>> = DeviceLocalBuffer::array(
+			device.clone(),
+			ray_count,
+			BufferUsage {
+				storage_buffer: true,
+				transfer_destination: true,
+				uniform_buffer: true,
+				.. BufferUsage::none()
+			},
+			iter::once(queue.family())
+		).unwrap();
+		
+		AutoCommandBufferBuilder::new(
+			device.clone(),
+			queue.family(),
+		).unwrap()
+			.copy_buffer(sample_data_cpu_buf.clone(), sample_data_dev_buf.clone())
+			.unwrap()
+			.copy_buffer(ray_data_cpu_buf.clone(), ray_data_dev_buf.clone())
+			.unwrap()
+			.build()
+			.unwrap()
+			.execute(queue.clone())
+			.unwrap()
+			.then_signal_fence_and_flush()
+			.unwrap()
+			.wait(None)
+			.unwrap();
+		
 		Ok(ImtRaster {
 			device,
 			queue,
 			opts,
-			square_vs,
-			glyph_base_fs,
-			glyph_post_fs,
-			square_buf,
-			sampler,
-			sample_data_buf,
-			ray_data_buf,
+			glyph_cs,
+			sample_count,
+			ray_count,
+			sample_data_buf: sample_data_dev_buf,
+			ray_data_buf: ray_data_dev_buf,
 			rastered_glyphs: Mutex::new(BTreeMap::new()),
 		})
+	}
+	
+	pub fn sample_count(&self) -> usize {
+		self.sample_count
+	}
+	
+	pub fn ray_count(&self) -> usize {
+		self.ray_count
+	}
+	
+	pub fn device(&self) -> Arc<Device> {
+		self.device.clone()
+	}
+	
+	pub fn device_ref(&self) -> &Arc<Device> {
+		&self.device
+	}
+	
+	pub fn queue(&self) -> Arc<Queue> {
+		self.queue.clone()
+	}
+	
+	pub fn queue_ref(&self) -> &Arc<Queue> {
+		&self.queue
+	}
+	
+	pub fn glyph_shader(&self) -> &glyph_cs::Shader {
+		&self.glyph_cs
+	}
+	
+	pub fn sample_data_buf(&self) -> Arc<DeviceLocalBuffer<[[f32; 4]]>> {
+		self.sample_data_buf.clone()
+	}
+	
+	pub fn ray_data_buf(&self) -> Arc<DeviceLocalBuffer<[[f32; 4]]>> {
+		self.ray_data_buf.clone()
 	}
 
 	pub fn raster_shaped_glyphs(

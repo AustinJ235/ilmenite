@@ -1,3 +1,24 @@
+//! ```rust
+//! let ilmenite = Ilmenite::new();
+//! 
+//! ilmenite.add_font(ImtFont::from_file(
+//! 	"MyFont",
+//! 	ImtWeight::Normal, 
+//! 	ImtRasterOps::default(),
+//! 	device,
+//! 	queue,
+//! 	"MyFont.ttf"
+//! ).unwrap());
+//! 
+//! let glyphs = ilmenite.glyphs_for_text(
+//! 	"MyFont",
+//! 	ImtWeight::Normal,
+//! 	12.0,
+//! 	None,
+//! 	"Hello World!"
+//! ).unwrap();
+//! ```
+
 extern crate vulkano;
 #[macro_use]
 extern crate vulkano_shaders;
@@ -29,7 +50,6 @@ pub use shape::{
 };
 
 pub(crate) use font::ImtFontKey;
-pub(crate) use primative::ImtShaderVert;
 
 use parking_lot::RwLock;
 use std::collections::HashMap;

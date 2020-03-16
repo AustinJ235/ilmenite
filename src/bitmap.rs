@@ -1,6 +1,6 @@
 use crate::{
-	shaders::glyph_base_fs, ImtError, ImtGeometry, ImtParsedGlyph, ImtParser, ImtPoint,
-	ImtRaster, ImtShaderVert,
+	shaders::glyph_cs, ImtError, ImtGeometry, ImtParsedGlyph, ImtParser, ImtPoint,
+	ImtRaster,
 };
 
 use std::sync::Arc;
@@ -8,12 +8,10 @@ use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, BufferUsage},
 	command_buffer::{AutoCommandBufferBuilder, CommandBuffer},
 	descriptor::descriptor_set::PersistentDescriptorSet,
-	format::Format,
-	framebuffer::{Framebuffer, Subpass},
-	image::{attachment::AttachmentImage, ImageUsage},
-	pipeline::{input_assembly::PrimitiveTopology, viewport::Viewport, GraphicsPipeline},
 	sync::GpuFuture,
 };
+use crate::vulkano::descriptor::PipelineLayoutAbstract;
+use vulkano::pipeline::ComputePipeline;
 
 #[derive(Clone)]
 pub struct ImtGlyphBitmap {
@@ -96,228 +94,103 @@ impl ImtGlyphBitmap {
 		if self.width == 0 || self.height == 0 {
 			return Ok(());
 		}
-
-		let mut line_data = glyph_base_fs::ty::LineData {
-			lines: [[0.0; 4]; 1024],
-			count: 0,
-			width: self.width,
-			height: self.height,
-			bounds: [
-				self.parsed.min_x,
-				self.parsed.max_x,
-				self.parsed.min_y,
-				self.parsed.max_y,
-			],
-			pixel_align_offset: [
-				self.pixel_align_offset_x,
-				self.pixel_align_offset_y,
-				0.0,
-				0.0,
-			],
-			scaler: self.scaler,
-			_dummy0: [0; 4],
-		};
+		
+		let mut line_data = Vec::with_capacity(self.lines.len());
 
 		for (pt_a, pt_b) in &self.lines {
-			let i = line_data.count;
-			line_data.lines[i as usize] = [pt_a.x, pt_a.y, pt_b.x, pt_b.y];
-			line_data.count += 1;
+			line_data.push([pt_a.x, pt_a.y, pt_b.x, pt_b.y]);
 		}
-
-		let line_data_buf = CpuAccessibleBuffer::from_data(
-			raster.device.clone(),
-			BufferUsage::all(), // TODO: Specific Usage
-			false,
-			line_data,
-		)
-		.unwrap();
-
-		let p1_out_image = AttachmentImage::with_usage(
-			raster.device.clone(),
-			[self.width, self.height],
-			Format::R8Unorm,
-			ImageUsage {
-				transfer_source: true,
-				color_attachment: true,
-				sampled: true,
-				..vulkano::image::ImageUsage::none()
+		
+		let line_data_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
+			raster.device(),
+			BufferUsage {
+				storage_buffer: true,
+				uniform_buffer: true,
+				.. BufferUsage::none()
 			},
-		)
-		.unwrap();
-
-		let p1_render_pass = Arc::new(
-			vulkano::single_pass_renderpass!(
-				raster.device.clone(),
-				attachments: {
-					color: {
-						load: Clear,
-						store: Store,
-						format: Format::R8Unorm,
-						samples: 1,
-					}
-				},
-				pass: {
-					color: [color],
-					depth_stencil: {}
-				}
-			)
-			.unwrap(),
-		);
-
-		let p1_pipeline = Arc::new(
-			GraphicsPipeline::start()
-				.vertex_input_single_buffer::<ImtShaderVert>()
-				.vertex_shader(raster.square_vs.main_entry_point(), ())
-				.fragment_shader(raster.glyph_base_fs.main_entry_point(), ())
-				.primitive_topology(PrimitiveTopology::TriangleList)
-				.render_pass(Subpass::from(p1_render_pass.clone(), 0).unwrap())
-				.viewports(::std::iter::once(Viewport {
-					origin: [0.0, 0.0],
-					depth_range: 0.0..1.0,
-					dimensions: [self.width as f32, self.height as f32],
-				}))
-				.depth_stencil_disabled()
-				.build(raster.device.clone())
-				.unwrap(),
-		);
-
-		let p1_set = PersistentDescriptorSet::start(
-			p1_pipeline.layout().descriptor_set_layout(0).unwrap().clone(),
-		)
-		.add_buffer(line_data_buf.clone())
-		.unwrap()
-		.add_buffer(raster.sample_data_buf.clone())
-		.unwrap()
-		.add_buffer(raster.ray_data_buf.clone())
-		.unwrap()
-		.build()
-		.unwrap();
-
-		let p1_framebuffer = Arc::new(
-			Framebuffer::start(p1_render_pass.clone())
-				.add(p1_out_image.clone())
-				.unwrap()
-				.build()
-				.unwrap(),
-		);
-
-		let p2_render_pass = Arc::new(
-			vulkano::single_pass_renderpass!(
-				raster.device.clone(),
-				attachments: {
-					color: {
-						load: Clear,
-						store: Store,
-						format: Format::R8Unorm,
-						samples: 1,
-					}
-				},
-				pass: {
-					color: [color],
-					depth_stencil: {}
-				}
-			)
-			.unwrap(),
-		);
-
-		let p2_pipeline = Arc::new(
-			GraphicsPipeline::start()
-				.vertex_input_single_buffer::<ImtShaderVert>()
-				.vertex_shader(raster.square_vs.main_entry_point(), ())
-				.viewports_dynamic_scissors_irrelevant(1)
-				.fragment_shader(raster.glyph_post_fs.main_entry_point(), ())
-				.render_pass(Subpass::from(p2_render_pass.clone(), 0).unwrap())
-				.viewports(::std::iter::once(Viewport {
-					origin: [0.0, 0.0],
-					depth_range: 0.0..1.0,
-					dimensions: [self.width as f32, self.height as f32],
-				}))
-				.depth_stencil_disabled()
-				.build(raster.device.clone())
-				.unwrap(),
-		);
-
-		let p2_out_image = AttachmentImage::with_usage(
-			raster.device.clone(),
-			[self.width, self.height],
-			Format::R8Unorm,
-			ImageUsage {
-				transfer_source: true,
-				color_attachment: true,
-				..vulkano::image::ImageUsage::none()
-			},
-		)
-		.unwrap();
-
-		let p2_framebuffer = Arc::new(
-			Framebuffer::start(p2_render_pass.clone())
-				.add(p2_out_image.clone())
-				.unwrap()
-				.build()
-				.unwrap(),
-		);
-
-		let p2_set = PersistentDescriptorSet::start(
-			p2_pipeline.layout().descriptor_set_layout(0).unwrap().clone(),
-		)
-		.add_sampled_image(p1_out_image.clone(), raster.sampler.clone())
-		.unwrap()
-		.build()
-		.unwrap();
-
-		let buffer_out = CpuAccessibleBuffer::from_iter(
-			raster.device.clone(),
-			BufferUsage::all(),
 			false,
-			(0..self.width * self.height).map(|_| 0u8),
-		)
-		.unwrap();
+			line_data.into_iter()
+		).unwrap();
+		
+		let bitmap_data_buf: Arc<CpuAccessibleBuffer<[f32]>> = unsafe {
+			CpuAccessibleBuffer::uninitialized_array(
+				raster.device(),
+				(self.width * self.height) as usize,
+				BufferUsage::all(),
+				true
+			).unwrap()
+		};
+		
+		let glyph_data_buf: Arc<CpuAccessibleBuffer<glyph_cs::ty::GlyphData>> =
+			CpuAccessibleBuffer::from_data(
+				raster.device(),
+				BufferUsage {
+					storage_buffer: true,
+					.. BufferUsage::none()
+				},
+				false,
+				glyph_cs::ty::GlyphData {
+					samples: raster.sample_count() as u32,
+					rays: raster.ray_count() as u32,
+					lines: self.lines.len() as u32,
+					scaler: self.scaler,
+					width: self.width,
+					height: self.height,
+					offset: [self.pixel_align_offset_x, self.pixel_align_offset_y, 0.0, 0.0],
+					bounds: [
+						self.parsed.min_x,
+						self.parsed.max_x,
+						self.parsed.min_y,
+						self.parsed.max_y,
+					],
+					_dummy0: [0; 8],
+				}
+			).unwrap();
+		
+		let pipeline = Arc::new(ComputePipeline::new(
+			raster.device(),
+			&raster.glyph_shader().main_entry_point(),
+			&()
+		).unwrap());
+		
+		let descriptor_set = PersistentDescriptorSet::start(pipeline.layout().descriptor_set_layout(0).unwrap().clone())
+			.add_buffer(raster.sample_data_buf()).unwrap()
+			.add_buffer(raster.ray_data_buf()).unwrap()
+			.add_buffer(line_data_buf).unwrap()
+			.add_buffer(bitmap_data_buf.clone()).unwrap()
+			.add_buffer(glyph_data_buf.clone()).unwrap()
+			.build()
+			.unwrap();
 
 		AutoCommandBufferBuilder::primary_one_time_submit(
-			raster.device.clone(),
-			raster.queue.family(),
+			raster.device(),
+			raster.queue_ref().family(),
 		)
-		.unwrap()
-		.begin_render_pass(p1_framebuffer.clone(), false, vec![[0.0].into()])
-		.unwrap()
-		.draw(
-			p1_pipeline.clone(),
-			&vulkano::command_buffer::DynamicState::none(),
-			raster.square_buf.clone(),
-			p1_set,
-			(),
-		)
-		.unwrap()
-		.end_render_pass()
-		.unwrap()
-		.begin_render_pass(p2_framebuffer.clone(), false, vec![[0.0].into()])
-		.unwrap()
-		.draw(
-			p2_pipeline.clone(),
-			&vulkano::command_buffer::DynamicState::none(),
-			raster.square_buf.clone(),
-			p2_set,
-			(),
-		)
-		.unwrap()
-		.end_render_pass()
-		.unwrap()
-		.copy_image_to_buffer(p2_out_image.clone(), buffer_out.clone())
-		.unwrap()
-		.build()
-		.unwrap()
-		.execute(raster.queue.clone())
-		.unwrap()
-		.then_signal_fence_and_flush()
-		.unwrap()
-		.wait(None)
-		.unwrap();
+			.unwrap()
+			.dispatch(
+				[self.width, self.height, 1],
+				pipeline,
+				descriptor_set,
+				()
+			)
+			.unwrap()
+			.build()
+			.unwrap()
+			.execute(raster.queue())
+			.unwrap()
+			.then_signal_fence_and_flush()
+			.unwrap()
+			.wait(None)
+			.unwrap();
 
-		let buf_read = buffer_out.read().unwrap();
+		let buf_read = bitmap_data_buf.read().unwrap();
 
 		for (y, chunk) in buf_read.chunks(self.width as usize).enumerate() {
 			for (x, val) in chunk.iter().enumerate() {
-				self.data[x][y] = *val as f32 / u8::max_value() as f32;
+				if *val != 0.0 {
+					println!("{} {} {}", x, y, val);
+					self.data[x][y] = *val;
+				}
 			}
 		}
 
