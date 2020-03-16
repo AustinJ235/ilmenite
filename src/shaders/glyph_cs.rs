@@ -18,11 +18,11 @@ layout(set = 0, binding = 2) buffer LineData {
 	vec4 point[];
 } lines;
 
-layout(set = 0, binding = 4) buffer BitmapData {
+layout(set = 0, binding = 3) buffer BitmapData {
 	float data[];
 } bitmap;
 
-layout(set = 0, binding = 3) buffer GlyphData {
+layout(set = 0, binding = 4) buffer GlyphData {
 	uint samples;
 	uint rays;
 	uint lines;
@@ -85,8 +85,7 @@ bool is_filled(vec2 ray_src, float ray_len) {
 }
 
 vec2 transform_coords(uint offset_i) {
-	// In TTF Y is Up so flip Y
-	vec2 coords = vec2(gl_GlobalInvocationID.x, -gl_GlobalInvocationID.y);
+	vec2 coords = vec2(float(gl_GlobalInvocationID.x), float(gl_GlobalInvocationID.y) * -1.0);
 	// Apply the pixel offset for sampling
 	coords += samples.offset[offset_i].xy;
 	// Bearings are rounded so image doesn't sit on pixel borders
@@ -113,7 +112,7 @@ void main() {
 		}
 	}
 	
-	bitmap.data[(gl_GlobalInvocationID.x * glyph.width) + gl_GlobalInvocationID.y] = sqrt(float(filled) / float(glyph.samples));
+	bitmap.data[(gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x] = sqrt(float(filled) / float(glyph.samples));
 }
 	"}
 }

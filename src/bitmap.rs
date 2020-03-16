@@ -1,17 +1,16 @@
 use crate::{
-	shaders::glyph_cs, ImtError, ImtGeometry, ImtParsedGlyph, ImtParser, ImtPoint,
-	ImtRaster,
+	shaders::glyph_cs, ImtError, ImtGeometry, ImtParsedGlyph, ImtParser, ImtPoint, ImtRaster,
 };
 
+use crate::vulkano::descriptor::PipelineLayoutAbstract;
 use std::sync::Arc;
 use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, BufferUsage},
 	command_buffer::{AutoCommandBufferBuilder, CommandBuffer},
 	descriptor::descriptor_set::PersistentDescriptorSet,
+	pipeline::ComputePipeline,
 	sync::GpuFuture,
 };
-use crate::vulkano::descriptor::PipelineLayoutAbstract;
-use vulkano::pipeline::ComputePipeline;
 
 #[derive(Clone)]
 pub struct ImtGlyphBitmap {
@@ -94,39 +93,42 @@ impl ImtGlyphBitmap {
 		if self.width == 0 || self.height == 0 {
 			return Ok(());
 		}
-		
+
 		let mut line_data = Vec::with_capacity(self.lines.len());
 
 		for (pt_a, pt_b) in &self.lines {
 			line_data.push([pt_a.x, pt_a.y, pt_b.x, pt_b.y]);
 		}
-		
-		let line_data_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
-			raster.device(),
-			BufferUsage {
-				storage_buffer: true,
-				uniform_buffer: true,
-				.. BufferUsage::none()
-			},
-			false,
-			line_data.into_iter()
-		).unwrap();
-		
+
+		let line_data_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> =
+			CpuAccessibleBuffer::from_iter(
+				raster.device(),
+				BufferUsage {
+					storage_buffer: true,
+					uniform_buffer: true,
+					..BufferUsage::none()
+				},
+				false,
+				line_data.into_iter(),
+			)
+			.unwrap();
+
 		let bitmap_data_buf: Arc<CpuAccessibleBuffer<[f32]>> = unsafe {
 			CpuAccessibleBuffer::uninitialized_array(
 				raster.device(),
 				(self.width * self.height) as usize,
 				BufferUsage::all(),
-				true
-			).unwrap()
+				true,
+			)
+			.unwrap()
 		};
-		
+
 		let glyph_data_buf: Arc<CpuAccessibleBuffer<glyph_cs::ty::GlyphData>> =
 			CpuAccessibleBuffer::from_data(
 				raster.device(),
 				BufferUsage {
 					storage_buffer: true,
-					.. BufferUsage::none()
+					..BufferUsage::none()
 				},
 				false,
 				glyph_cs::ty::GlyphData {
@@ -144,53 +146,56 @@ impl ImtGlyphBitmap {
 						self.parsed.max_y,
 					],
 					_dummy0: [0; 8],
-				}
-			).unwrap();
-		
-		let pipeline = Arc::new(ComputePipeline::new(
-			raster.device(),
-			&raster.glyph_shader().main_entry_point(),
-			&()
-		).unwrap());
-		
-		let descriptor_set = PersistentDescriptorSet::start(pipeline.layout().descriptor_set_layout(0).unwrap().clone())
-			.add_buffer(raster.sample_data_buf()).unwrap()
-			.add_buffer(raster.ray_data_buf()).unwrap()
-			.add_buffer(line_data_buf).unwrap()
-			.add_buffer(bitmap_data_buf.clone()).unwrap()
-			.add_buffer(glyph_data_buf.clone()).unwrap()
-			.build()
+				},
+			)
 			.unwrap();
+
+		let pipeline = Arc::new(
+			ComputePipeline::new(
+				raster.device(),
+				&raster.glyph_shader().main_entry_point(),
+				&(),
+			)
+			.unwrap(),
+		);
+
+		let descriptor_set = PersistentDescriptorSet::start(
+			pipeline.layout().descriptor_set_layout(0).unwrap().clone(),
+		)
+		.add_buffer(raster.sample_data_buf())
+		.unwrap()
+		.add_buffer(raster.ray_data_buf())
+		.unwrap()
+		.add_buffer(line_data_buf)
+		.unwrap()
+		.add_buffer(bitmap_data_buf.clone())
+		.unwrap()
+		.add_buffer(glyph_data_buf.clone())
+		.unwrap()
+		.build()
+		.unwrap();
 
 		AutoCommandBufferBuilder::primary_one_time_submit(
 			raster.device(),
 			raster.queue_ref().family(),
 		)
-			.unwrap()
-			.dispatch(
-				[self.width, self.height, 1],
-				pipeline,
-				descriptor_set,
-				()
-			)
-			.unwrap()
-			.build()
-			.unwrap()
-			.execute(raster.queue())
-			.unwrap()
-			.then_signal_fence_and_flush()
-			.unwrap()
-			.wait(None)
-			.unwrap();
+		.unwrap()
+		.dispatch([self.width, self.height, 1], pipeline, descriptor_set, ())
+		.unwrap()
+		.build()
+		.unwrap()
+		.execute(raster.queue())
+		.unwrap()
+		.then_signal_fence_and_flush()
+		.unwrap()
+		.wait(None)
+		.unwrap();
 
 		let buf_read = bitmap_data_buf.read().unwrap();
 
 		for (y, chunk) in buf_read.chunks(self.width as usize).enumerate() {
 			for (x, val) in chunk.iter().enumerate() {
-				if *val != 0.0 {
-					println!("{} {} {}", x, y, val);
-					self.data[x][y] = *val;
-				}
+				self.data[x][y] = *val;
 			}
 		}
 
