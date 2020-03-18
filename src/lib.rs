@@ -1,10 +1,29 @@
-extern crate vulkano;
-#[macro_use]
-extern crate vulkano_shaders;
+//! ```rust
+//! let ilmenite = Ilmenite::new();
+//!
+//! ilmenite.add_font(
+//! 	ImtFont::from_file(
+//! 		"MyFont",
+//! 		ImtWeight::Normal,
+//! 		ImtRasterOps::default(),
+//! 		device,
+//! 		queue,
+//! 		"MyFont.ttf",
+//! 		)
+//! 	.unwrap(),
+//! 	);
+//!
+//! let glyphs = ilmenite
+//! 	.glyphs_for_text("MyFont", ImtWeight::Normal, 12.0, None, "Hello World!")
+//! 	.unwrap();
+//! ```
+
 extern crate allsorts;
 extern crate crossbeam;
 extern crate ordered_float;
 extern crate parking_lot;
+extern crate vulkano;
+extern crate vulkano_shaders;
 
 pub mod bitmap;
 pub mod error;
@@ -27,12 +46,10 @@ pub use shape::{
 	ImtGlyphInfo, ImtHoriAlign, ImtShapeOpts, ImtShapedGlyph, ImtShaper, ImtTextWrap,
 	ImtVertAlign,
 };
-
-pub(crate) use font::ImtFontKey;
-pub(crate) use primative::ImtShaderVert;
-
+use std::sync::Arc;
 use parking_lot::RwLock;
 use std::collections::HashMap;
+pub(crate) use font::ImtFontKey;
 
 pub struct ImtGlyph {
 	pub x: f32,
@@ -44,7 +61,7 @@ pub struct ImtGlyph {
 	pub family: String,
 	pub weight: ImtWeight,
 	pub index: u16,
-	pub bitmap: Vec<f32>,
+	pub bitmap: Option<Arc<Vec<f32>>>,
 }
 
 pub struct Ilmenite {

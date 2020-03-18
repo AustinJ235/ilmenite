@@ -102,16 +102,6 @@ impl ImtFont {
 		Ok(rastered_glyphs
 			.into_iter()
 			.map(|g| {
-				let bitmap_len = (g.bitmap.width * g.bitmap.height) as usize;
-				let mut bitmap = Vec::with_capacity(bitmap_len);
-				bitmap.resize(bitmap_len, 0_f32);
-
-				for x in 0..(g.bitmap.width as usize) {
-					for y in 0..(g.bitmap.height as usize) {
-						bitmap[(g.bitmap.width as usize * y) + x] = g.bitmap.data[x][y];
-					}
-				}
-
 				ImtGlyph {
 					x: (g.shaped.position.x * font_props.scaler * text_height)
 						+ g.bitmap.bearing_x,
@@ -124,7 +114,7 @@ impl ImtFont {
 					family: self.family.clone(),
 					weight: self.weight.clone(),
 					index: g.shaped.parsed.inner.glyph_index.unwrap(),
-					bitmap,
+					bitmap: g.bitmap.data.clone(),
 				}
 			})
 			.collect())
