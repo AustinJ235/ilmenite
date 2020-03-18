@@ -37,7 +37,9 @@ pub mod shape;
 
 pub use bitmap::ImtGlyphBitmap;
 pub use error::{ImtError, ImtErrorSrc, ImtErrorTy};
+pub(crate) use font::ImtFontKey;
 pub use font::{ImtFont, ImtWeight};
+use parking_lot::RwLock;
 pub use parse::{ImtFontProps, ImtParsedGlyph, ImtParser};
 pub use primative::{ImtGeometry, ImtPoint, ImtPosition};
 pub use raster::{ImtFillQuality, ImtRaster, ImtRasterOps, ImtRasteredGlyph, ImtSampleQuality};
@@ -46,10 +48,7 @@ pub use shape::{
 	ImtGlyphInfo, ImtHoriAlign, ImtShapeOpts, ImtShapedGlyph, ImtShaper, ImtTextWrap,
 	ImtVertAlign,
 };
-use std::sync::Arc;
-use parking_lot::RwLock;
-use std::collections::HashMap;
-pub(crate) use font::ImtFontKey;
+use std::{collections::HashMap, sync::Arc};
 
 pub struct ImtGlyph {
 	pub x: f32,

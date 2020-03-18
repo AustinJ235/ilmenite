@@ -183,7 +183,7 @@ impl ImtGlyphBitmap {
 		.unwrap()
 		.wait(None)
 		.unwrap();
-		
+
 		self.data = Some(Arc::new(bitmap_data_buf.read().unwrap().iter().cloned().collect()));
 		Ok(())
 	}
