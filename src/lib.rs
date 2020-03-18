@@ -39,7 +39,6 @@ pub use bitmap::ImtGlyphBitmap;
 pub use error::{ImtError, ImtErrorSrc, ImtErrorTy};
 pub(crate) use font::ImtFontKey;
 pub use font::{ImtFont, ImtWeight};
-use parking_lot::RwLock;
 pub use parse::{ImtFontProps, ImtParsedGlyph, ImtParser};
 pub use primative::{ImtGeometry, ImtPoint, ImtPosition};
 pub use raster::{ImtFillQuality, ImtRaster, ImtRasterOps, ImtRasteredGlyph, ImtSampleQuality};
@@ -49,6 +48,7 @@ pub use shape::{
 	ImtVertAlign,
 };
 use std::{collections::HashMap, sync::Arc};
+use crossbeam::sync::ShardedLock;
 
 pub struct ImtGlyph {
 	pub x: f32,
@@ -64,19 +64,19 @@ pub struct ImtGlyph {
 }
 
 pub struct Ilmenite {
-	fonts: RwLock<HashMap<ImtFontKey, ImtFont>>,
+	fonts: ShardedLock<HashMap<ImtFontKey, ImtFont>>,
 }
 
 impl Ilmenite {
 	pub fn new() -> Self {
 		Ilmenite {
-			fonts: RwLock::new(HashMap::new()),
+			fonts: ShardedLock::new(HashMap::new()),
 		}
 	}
 
 	pub fn add_font(&self, font: ImtFont) {
 		let key = font.key();
-		self.fonts.write().insert(key, font);
+		self.fonts.write().unwrap().insert(key, font);
 	}
 
 	pub fn glyphs_for_text<T: AsRef<str>>(
@@ -89,6 +89,7 @@ impl Ilmenite {
 	) -> Result<Vec<ImtGlyph>, ImtError> {
 		self.fonts
 			.read()
+			.unwrap()
 			.get(&ImtFontKey {
 				family,
 				weight,
