@@ -21,8 +21,6 @@ pub struct ImtGlyphBitmap {
 	pub bearing_y: f32,
 	lines: Vec<(ImtPoint, ImtPoint)>,
 	scaler: f32,
-	pixel_align_offset_x: f32,
-	pixel_align_offset_y: f32,
 	pub data: Option<Arc<Vec<f32>>>,
 }
 
@@ -50,18 +48,8 @@ impl ImtGlyphBitmap {
 	) -> ImtGlyphBitmap {
 		let font_props = parser.font_props();
 		let scaler = font_props.scaler * text_height;
-		let mut bearing_x = parsed.min_x * scaler;
-		let mut bearing_y = (font_props.ascender - parsed.max_y) * scaler;
-
-		let pixel_align_offset_x = (bearing_x.round() - bearing_x)
-			+ expand_round(parsed.min_x * scaler, false)
-			- (parsed.min_x * scaler);
-		let pixel_align_offset_y = (bearing_y.round() - bearing_y)
-			- expand_round(parsed.min_y * scaler, true)
-			+ (parsed.min_y * scaler);
-
-		bearing_x = bearing_x.round();
-		bearing_y = bearing_y.round();
+		let bearing_x = parsed.min_x * scaler;
+		let bearing_y = (font_props.ascender - parsed.max_y) * scaler;
 
 		let height = (expand_round(parsed.max_y * scaler, true)
 			- expand_round(parsed.min_y * scaler, false)) as u32;
@@ -76,8 +64,6 @@ impl ImtGlyphBitmap {
 			bearing_y,
 			data: None,
 			lines: Vec::new(),
-			pixel_align_offset_x,
-			pixel_align_offset_y,
 			scaler,
 		}
 	}
@@ -131,7 +117,6 @@ impl ImtGlyphBitmap {
 					scaler: self.scaler,
 					width: self.width,
 					height: self.height,
-					offset: [self.pixel_align_offset_x, self.pixel_align_offset_y, 0.0, 0.0],
 					bounds: [
 						self.parsed.min_x,
 						self.parsed.max_x,
