@@ -78,7 +78,7 @@ bool is_filled(highp vec2 ray_src, highp float ray_len, out highp float fill_amt
 		}
 	}
 	
-	fill_amt = smoothstep(0.0, 1.0, (ray_min_dist_sum / glyph.rays) / max_dist);
+	fill_amt = (ray_min_dist_sum / float(glyph.rays)) / max_dist;
 	return least_hits % 2 != 0;
 }
 
@@ -91,6 +91,10 @@ highp vec2 transform_coords(uint offset_i) {
 	// Bearing adjustment
 	coords += vec2(glyph.bounds.x, glyph.bounds.w);
 	return coords;
+}
+
+highp float sharpen(highp float val) {
+	return smoothstep(0.0, 1.0, sqrt(val));
 }
 
 void main() {
@@ -108,7 +112,7 @@ void main() {
 		}
 	}
 	
-	bitmap.data[(gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x] = sqrt(float(fill_amt_sum) / float(glyph.samples));
+	bitmap.data[(gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x] = sharpen(fill_amt_sum / float(glyph.samples));
 }
 	"}
 }
