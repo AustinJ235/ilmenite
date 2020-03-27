@@ -32,7 +32,7 @@ layout(set = 0, binding = 4) buffer GlyphData {
 	highp vec4 bounds;
 } glyph;
 
-bool intersect(highp vec2 l1p1, highp vec2 l1p2, highp vec2 l2p1, highp vec2 l2p2, out highp vec2 point) {
+bool ray_intersects(highp vec2 l1p1, highp vec2 l1p2, highp vec2 l2p1, highp vec2 l2p2, out highp vec2 point) {
 	highp vec2 r = l1p2 - l1p1;
 	highp vec2 s = l2p2 - l2p1;
 	highp float det = r.x * s.y - r.y * s.x;
@@ -47,20 +47,21 @@ bool intersect(highp vec2 l1p1, highp vec2 l1p2, highp vec2 l2p1, highp vec2 l2p
 	}
 }
 
-bool is_filled(highp vec2 ray_src, highp float ray_len, out highp float fill_amt) {
+bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill_amt) {
 	int least_hits = -1;
 	bool intersects = false;
 	highp float ray_min_dist_sum = 0.0;
-	highp float max_dist = ((1.0 / (sqrt(glyph.samples) + 1.0)) / glyph.scaler) / 2.0;
 	highp vec2 intersect_point = vec2(0.0);
 	
 	for(uint ray_dir_i = 0; ray_dir_i < glyph.rays; ray_dir_i++) {
 		highp vec2 ray_dest = ray_src + (rays.direction[ray_dir_i].xy * ray_len);
 		int hits = 0;
-		highp float ray_min_dist = max_dist;
+		highp float ray_angle = atan(rays.direction[ray_dir_i].y / rays.direction[ray_dir_i].x);
+		highp float ray_max_dist = (1.0 / (sqrt(glyph.samples) + 1.0)) / cos(ray_angle);
+		highp float ray_min_dist = ray_max_dist;
 		
 		for(uint line_i = 0; line_i < glyph.lines; line_i ++) {
-			if(intersect(ray_src, ray_dest, lines.point[line_i].xy, lines.point[line_i].zw, intersect_point)) {
+			if(ray_intersects(ray_src, ray_dest, lines.point[line_i].xy, lines.point[line_i].zw, intersect_point)) {
 				highp float dist = distance(ray_src, intersect_point);
 				
 				if(dist < ray_min_dist) {
@@ -71,14 +72,14 @@ bool is_filled(highp vec2 ray_src, highp float ray_len, out highp float fill_amt
 			}
 		}
 		
-		ray_min_dist_sum += ray_min_dist;
+		ray_min_dist_sum += sqrt(ray_min_dist / ray_max_dist);
 		
 		if(least_hits == -1 || hits < least_hits) {
 			least_hits = hits;
 		}
 	}
 	
-	fill_amt = (ray_min_dist_sum / float(glyph.rays)) / max_dist;
+	fill_amt = sqrt(ray_min_dist_sum / float(glyph.rays));
 	return least_hits % 2 != 0;
 }
 
@@ -93,10 +94,6 @@ highp vec2 transform_coords(uint offset_i) {
 	return coords;
 }
 
-highp float sharpen(highp float val) {
-	return smoothstep(0.0, 1.0, sqrt(val));
-}
-
 void main() {
 	highp float ray_len = sqrt(
 		pow(float(glyph.width) / glyph.scaler, 2)
@@ -107,12 +104,12 @@ void main() {
 	highp float fill_amt_sum = 0.0;
 	
 	for(uint i = 0; i < glyph.samples; i++) {
-		if(is_filled(transform_coords(i), ray_len, fill_amt)) {
+		if(sample_filled(transform_coords(i), ray_len, fill_amt)) {
 			fill_amt_sum += fill_amt;
 		}
 	}
 	
-	bitmap.data[(gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x] = sharpen(fill_amt_sum / float(glyph.samples));
+	bitmap.data[(gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x] = sqrt(fill_amt_sum / float(glyph.samples));
 }
 	"}
 }
