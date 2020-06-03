@@ -54,10 +54,17 @@ bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill
 	highp vec2 intersect_point = vec2(0.0);
 	
 	for(uint ray_dir_i = 0; ray_dir_i < glyph.rays; ray_dir_i++) {
-		highp vec2 ray_dest = ray_src + (rays.direction[ray_dir_i].xy * ray_len);
 		int hits = 0;
+		highp vec2 ray_dest = ray_src + (rays.direction[ray_dir_i].xy * ray_len);
+		highp float cell_height = (glyph.scaler / sqrt(glyph.samples));
+		highp float cell_width = cell_height / 3.0;
 		highp float ray_angle = atan(rays.direction[ray_dir_i].y / rays.direction[ray_dir_i].x);
-		highp float ray_max_dist = (1.0 / (sqrt(glyph.samples * 3.0) + 1.0)) / cos(ray_angle);
+		highp float ray_max_dist = (cell_width / 2.0) / cos(ray_angle);
+
+		if(ray_max_dist > (cell_height / 2.0)) {
+			ray_max_dist = (cell_height / 2.0) / cos(1.570796327 - ray_angle);
+		}
+		
 		highp float ray_min_dist = ray_max_dist;
 		
 		for(uint line_i = 0; line_i < glyph.lines; line_i ++) {
@@ -72,14 +79,14 @@ bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill
 			}
 		}
 		
-		ray_min_dist_sum += sqrt(ray_min_dist / ray_max_dist);
+		ray_min_dist_sum += ray_min_dist / ray_max_dist;
 		
 		if(least_hits == -1 || hits < least_hits) {
 			least_hits = hits;
 		}
 	}
 	
-	fill_amt = sqrt(ray_min_dist_sum / float(glyph.rays));
+	fill_amt = ray_min_dist_sum / float(glyph.rays);
 	return least_hits % 2 != 0;
 }
 
