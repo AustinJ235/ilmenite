@@ -57,7 +57,7 @@ bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill
 		highp vec2 ray_dest = ray_src + (rays.direction[ray_dir_i].xy * ray_len);
 		int hits = 0;
 		highp float ray_angle = atan(rays.direction[ray_dir_i].y / rays.direction[ray_dir_i].x);
-		highp float ray_max_dist = (1.0 / (sqrt(glyph.samples) + 1.0)) / cos(ray_angle);
+		highp float ray_max_dist = (1.0 / (sqrt(glyph.samples * 3.0) + 1.0)) / cos(ray_angle);
 		highp float ray_min_dist = ray_max_dist;
 		
 		for(uint line_i = 0; line_i < glyph.lines; line_i ++) {
@@ -83,15 +83,29 @@ bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill
 	return least_hits % 2 != 0;
 }
 
-highp vec2 transform_coords(uint offset_i) {
+highp vec2 transform_coords(uint offset_i, vec2 offset) {
 	highp vec2 coords = vec2(float(gl_GlobalInvocationID.x), float(gl_GlobalInvocationID.y) * -1.0);
 	// Apply the pixel offset for sampling
 	coords += samples.offset[offset_i].xy;
+	coords += offset;
 	// Convert to font units
 	coords /= glyph.scaler;
 	// Bearing adjustment
 	coords += vec2(glyph.bounds.x, glyph.bounds.w);
 	return coords;
+}
+
+highp float get_value(highp vec2 offset, highp float ray_len) {
+	highp float fill_amt = 0.0;
+	highp float fill_amt_sum = 0.0;
+	
+	for(uint i = 0; i < glyph.samples; i++) {
+		if(sample_filled(transform_coords(i, offset), ray_len, fill_amt)) {
+			fill_amt_sum += fill_amt;
+		}
+	}
+	
+	return sqrt(fill_amt_sum / float(glyph.samples));
 }
 
 void main() {
@@ -100,16 +114,11 @@ void main() {
 			+ pow(float(glyph.height) / glyph.scaler, 2)
 	);
 	
-	highp float fill_amt = 0.0;
-	highp float fill_amt_sum = 0.0;
-	
-	for(uint i = 0; i < glyph.samples; i++) {
-		if(sample_filled(transform_coords(i), ray_len, fill_amt)) {
-			fill_amt_sum += fill_amt;
-		}
-	}
-	
-	bitmap.data[(gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x] = sqrt(fill_amt_sum / float(glyph.samples));
+	uint rindex = ((gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x) * 4;
+	bitmap.data[rindex] = get_value(vec2(1.0 / 6.0, 0.0), ray_len);
+	bitmap.data[rindex + 1] = get_value(vec2(3.0 / 6.0, 0.0), ray_len);
+	bitmap.data[rindex + 2] = get_value(vec2(5.0 / 6.0, 0.0), ray_len);
+	bitmap.data[rindex + 3] = (bitmap.data[rindex] + bitmap.data[rindex + 1] + bitmap.data[rindex + 2]) / 3.0;
 }
 	"}
 }

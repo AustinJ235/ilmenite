@@ -95,7 +95,7 @@ impl ImtGlyphBitmap {
 		let bitmap_data_buf: Arc<CpuAccessibleBuffer<[f32]>> = unsafe {
 			CpuAccessibleBuffer::uninitialized_array(
 				raster.device(),
-				(self.width * self.height) as usize,
+				(self.width * self.height * 4) as usize,
 				BufferUsage::all(),
 				true,
 			)
