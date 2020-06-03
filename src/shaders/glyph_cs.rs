@@ -112,7 +112,7 @@ highp float get_value(highp vec2 offset, highp float ray_len) {
 		}
 	}
 	
-	return pow(fill_amt_sum / float(glyph.samples), 1.0 / 1.8);
+	return pow(fill_amt_sum / float(glyph.samples), 1.2);
 }
 
 void main() {
