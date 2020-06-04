@@ -12,6 +12,7 @@ use vulkano::{
 	sync::GpuFuture,
 };
 
+/// Data is Linear RGBA
 #[derive(Clone)]
 pub struct ImtGlyphBitmap {
 	parsed: Arc<ImtParsedGlyph>,

@@ -60,6 +60,7 @@ pub struct ImtGlyph {
 	pub family: String,
 	pub weight: ImtWeight,
 	pub index: u16,
+	/// Bitmap layout is Linear RGBA.
 	pub bitmap: Option<Arc<Vec<f32>>>,
 }
 
