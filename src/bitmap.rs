@@ -153,21 +153,23 @@ impl ImtGlyphBitmap {
 		.build()
 		.unwrap();
 
-		AutoCommandBufferBuilder::primary_one_time_submit(
+		let mut cmd_buf = AutoCommandBufferBuilder::primary_one_time_submit(
 			raster.device(),
 			raster.queue_ref().family(),
 		)
-		.unwrap()
-		.dispatch([self.width, self.height, 1], pipeline, descriptor_set, ())
-		.unwrap()
-		.build()
-		.unwrap()
-		.execute(raster.queue())
-		.unwrap()
-		.then_signal_fence_and_flush()
-		.unwrap()
-		.wait(None)
 		.unwrap();
+
+		cmd_buf.dispatch([self.width, self.height, 1], pipeline, descriptor_set, ()).unwrap();
+
+		cmd_buf
+			.build()
+			.unwrap()
+			.execute(raster.queue())
+			.unwrap()
+			.then_signal_fence_and_flush()
+			.unwrap()
+			.wait(None)
+			.unwrap();
 
 		self.data = Some(Arc::new(bitmap_data_buf.read().unwrap().iter().cloned().collect()));
 		Ok(())

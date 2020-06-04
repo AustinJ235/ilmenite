@@ -36,6 +36,7 @@ pub mod shaders;
 pub mod shape;
 
 pub use bitmap::ImtGlyphBitmap;
+use crossbeam::sync::ShardedLock;
 pub use error::{ImtError, ImtErrorSrc, ImtErrorTy};
 pub(crate) use font::ImtFontKey;
 pub use font::{ImtFont, ImtWeight};
@@ -48,7 +49,6 @@ pub use shape::{
 	ImtVertAlign,
 };
 use std::{collections::HashMap, sync::Arc};
-use crossbeam::sync::ShardedLock;
 
 pub struct ImtGlyph {
 	pub x: f32,

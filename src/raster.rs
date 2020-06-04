@@ -156,12 +156,16 @@ impl ImtRaster {
 		)
 		.unwrap();
 
-		AutoCommandBufferBuilder::new(device.clone(), queue.family())
-			.unwrap()
+		let mut cmd_buf =
+			AutoCommandBufferBuilder::new(device.clone(), queue.family()).unwrap();
+
+		cmd_buf
 			.copy_buffer(sample_data_cpu_buf.clone(), sample_data_dev_buf.clone())
 			.unwrap()
 			.copy_buffer(ray_data_cpu_buf.clone(), ray_data_dev_buf.clone())
-			.unwrap()
+			.unwrap();
+
+		cmd_buf
 			.build()
 			.unwrap()
 			.execute(queue.clone())
