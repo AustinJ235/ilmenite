@@ -20,6 +20,8 @@ pub struct ImtGlyphBitmap {
 	pub height: u32,
 	pub bearing_x: f32,
 	pub bearing_y: f32,
+	offset_x: f32,
+	offset_y: f32,
 	lines: Vec<(ImtPoint, ImtPoint)>,
 	scaler: f32,
 	pub data: Option<Arc<Vec<f32>>>,
@@ -48,14 +50,35 @@ impl ImtGlyphBitmap {
 		text_height: f32,
 	) -> ImtGlyphBitmap {
 		let font_props = parser.font_props();
-		let scaler = font_props.scaler * text_height;
-		let bearing_x = parsed.min_x * scaler;
-		let bearing_y = (font_props.ascender - parsed.max_y) * scaler;
+		let mut scaler = font_props.scaler * text_height;
+
+		let mut offset_x = parsed.min_x * scaler;
+		let bearing_x = offset_x.floor();
+		offset_x = (bearing_x - offset_x).abs();
+
+		let mut offset_y = (font_props.ascender - parsed.max_y) * scaler;
+		let bearing_y = offset_y.floor();
+		offset_y = (bearing_y - offset_y).abs();
+
+		let mut height = (((parsed.max_y - parsed.min_y) * scaler).abs() + offset_y).ceil() as u32;
+		let mut width = (((parsed.max_x - parsed.min_x) * scaler).abs() + offset_x).ceil() as u32;
+
+		offset_x += 1.0;
+		offset_y -= 1.0;
+		height += 1;
+		width += 1;
+
+		scaler *= (height as f32 + offset_y) / height as f32;
+
+		/*let offset_x = bearing_x.fract();
+		let offset_y = bearing_y.fract();
+		bearing_x = bearing_x.floor();
+		bearing_y = bearing_y.floor();
 
 		let height = (expand_round(parsed.max_y * scaler, true)
 			- expand_round(parsed.min_y * scaler, false)) as u32;
 		let width = (expand_round(parsed.max_x * scaler, true)
-			- expand_round(parsed.min_x * scaler, false)) as u32;
+			- expand_round(parsed.min_x * scaler, false)) as u32;*/
 
 		ImtGlyphBitmap {
 			parsed,
@@ -63,6 +86,8 @@ impl ImtGlyphBitmap {
 			height,
 			bearing_x,
 			bearing_y,
+			offset_x,
+			offset_y,
 			data: None,
 			lines: Vec::new(),
 			scaler,
@@ -124,6 +149,8 @@ impl ImtGlyphBitmap {
 						self.parsed.min_y,
 						self.parsed.max_y,
 					],
+					offset_x: self.offset_x,
+					offset_y: self.offset_y,
 					_dummy0: [0; 8],
 				},
 			)
