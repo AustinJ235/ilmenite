@@ -30,8 +30,6 @@ layout(set = 0, binding = 4) buffer GlyphData {
 	uint width;
 	uint height;
 	highp vec4 bounds;
-	highp float offset_x;
-	highp float offset_y;
 } glyph;
 
 bool ray_intersects(highp vec2 l1p1, highp vec2 l1p2, highp vec2 l2p1, highp vec2 l2p2, out highp vec2 point) {
@@ -93,10 +91,7 @@ bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill
 }
 
 highp vec2 transform_coords(uint offset_i, vec2 offset) {
-	highp vec2 coords = vec2(
-		float(gl_GlobalInvocationID.x) - glyph.offset_x,
-		(float(gl_GlobalInvocationID.y) * -1.0) + glyph.offset_y
-	);
+	highp vec2 coords = vec2(float(gl_GlobalInvocationID.x), float(gl_GlobalInvocationID.y) * -1.0);
 	// Apply the pixel offset for sampling
 	coords += samples.offset[offset_i].xy;
 	coords += offset;
