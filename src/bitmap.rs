@@ -1,5 +1,6 @@
 use crate::{
 	shaders::glyph_cs, ImtError, ImtGeometry, ImtParsedGlyph, ImtParser, ImtPoint, ImtRaster,
+	ImtRasterOpts,
 };
 
 use crate::vulkano::descriptor::PipelineLayoutAbstract;
@@ -22,6 +23,8 @@ pub struct ImtGlyphBitmap {
 	pub bearing_y: f32,
 	lines: Vec<(ImtPoint, ImtPoint)>,
 	scaler: f32,
+	offset_x: f32,
+	offset_y: f32,
 	pub data: Option<Arc<Vec<f32>>>,
 }
 
@@ -46,16 +49,30 @@ impl ImtGlyphBitmap {
 		parser: &ImtParser,
 		parsed: Arc<ImtParsedGlyph>,
 		text_height: f32,
+		raster_opts: &ImtRasterOpts,
 	) -> ImtGlyphBitmap {
 		let font_props = parser.font_props();
 		let scaler = font_props.scaler * text_height;
-		let bearing_x = parsed.min_x * scaler;
-		let bearing_y = (font_props.ascender - parsed.max_y) * scaler;
+
+		let mut bearing_x = parsed.min_x * scaler;
+		let mut bearing_y = (font_props.ascender - parsed.max_y) * scaler;
+
+		let (offset_x, offset_y) = if raster_opts.align_whole_pixels {
+			let offset_x = (bearing_x - bearing_x.ceil()) + 1.0;
+			bearing_x = bearing_x.ceil();
+			let offset_y = -(bearing_y - bearing_y.ceil()) - 1.0;
+			bearing_y = bearing_y.ceil();
+			(offset_x, offset_y)
+		} else {
+			(0.0, 0.0)
+		};
 
 		let height = (expand_round(parsed.max_y * scaler, true)
-			- expand_round(parsed.min_y * scaler, false)) as u32;
+			- expand_round(parsed.min_y * scaler, false)) as u32
+			+ 1;
 		let width = (expand_round(parsed.max_x * scaler, true)
-			- expand_round(parsed.min_x * scaler, false)) as u32;
+			- expand_round(parsed.min_x * scaler, false)) as u32
+			+ 1;
 
 		ImtGlyphBitmap {
 			parsed,
@@ -63,6 +80,8 @@ impl ImtGlyphBitmap {
 			height,
 			bearing_x,
 			bearing_y,
+			offset_x,
+			offset_y,
 			data: None,
 			lines: Vec::new(),
 			scaler,
@@ -124,6 +143,7 @@ impl ImtGlyphBitmap {
 						self.parsed.min_y,
 						self.parsed.max_y,
 					],
+					offset: [self.offset_x, self.offset_y],
 					_dummy0: [0; 8],
 				},
 			)

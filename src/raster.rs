@@ -25,16 +25,18 @@ pub enum ImtSampleQuality {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ImtRasterOps {
+pub struct ImtRasterOpts {
 	pub fill_quality: ImtFillQuality,
 	pub sample_quality: ImtSampleQuality,
+	pub align_whole_pixels: bool,
 }
 
-impl Default for ImtRasterOps {
+impl Default for ImtRasterOpts {
 	fn default() -> Self {
-		ImtRasterOps {
+		ImtRasterOpts {
 			fill_quality: ImtFillQuality::Normal,
 			sample_quality: ImtSampleQuality::Normal,
+			align_whole_pixels: true,
 		}
 	}
 }
@@ -53,7 +55,7 @@ enum RasterCacheState {
 
 #[allow(dead_code)]
 pub struct ImtRaster {
-	opts: ImtRasterOps,
+	opts: ImtRasterOpts,
 	device: Arc<Device>,
 	queue: Arc<Queue>,
 	glyph_cs: glyph_cs::Shader,
@@ -68,7 +70,7 @@ impl ImtRaster {
 	pub fn new(
 		device: Arc<Device>,
 		queue: Arc<Queue>,
-		opts: ImtRasterOps,
+		opts: ImtRasterOpts,
 	) -> Result<Self, ImtError> {
 		let glyph_cs = glyph_cs::Shader::load(device.clone()).unwrap();
 		let sample_count = match &opts.sample_quality {
@@ -321,7 +323,8 @@ impl ImtRaster {
 			// Drop the lock so other threads can keep doing things.
 			cache_lk_op = None;
 
-			let mut bitmap = ImtGlyphBitmap::new(parser, shaped.parsed.clone(), text_height);
+			let mut bitmap =
+				ImtGlyphBitmap::new(parser, shaped.parsed.clone(), text_height, &self.opts);
 			bitmap.create_outline();
 
 			if let Err(e) = bitmap.raster(self) {

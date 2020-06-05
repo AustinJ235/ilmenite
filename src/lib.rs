@@ -5,7 +5,7 @@
 //! 	ImtFont::from_file(
 //! 		"MyFont",
 //! 		ImtWeight::Normal,
-//! 		ImtRasterOps::default(),
+//! 		ImtRasterOpts::default(),
 //! 		device,
 //! 		queue,
 //! 		"MyFont.ttf",
@@ -42,7 +42,9 @@ pub(crate) use font::ImtFontKey;
 pub use font::{ImtFont, ImtWeight};
 pub use parse::{ImtFontProps, ImtParsedGlyph, ImtParser};
 pub use primative::{ImtGeometry, ImtPoint, ImtPosition};
-pub use raster::{ImtFillQuality, ImtRaster, ImtRasterOps, ImtRasteredGlyph, ImtSampleQuality};
+pub use raster::{
+	ImtFillQuality, ImtRaster, ImtRasterOpts, ImtRasteredGlyph, ImtSampleQuality,
+};
 pub use script::{ImtLang, ImtScript};
 pub use shape::{
 	ImtGlyphInfo, ImtHoriAlign, ImtShapeOpts, ImtShapedGlyph, ImtShaper, ImtTextWrap,

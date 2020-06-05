@@ -36,6 +36,7 @@ pub struct ImtShapeOpts {
 	pub text_wrap: ImtTextWrap,
 	pub vert_align: ImtVertAlign,
 	pub hori_align: ImtHoriAlign,
+	pub align_whole_pixels: bool,
 }
 
 impl Default for ImtShapeOpts {
@@ -48,6 +49,7 @@ impl Default for ImtShapeOpts {
 			text_wrap: ImtTextWrap::None,
 			vert_align: ImtVertAlign::Top,
 			hori_align: ImtHoriAlign::Left,
+			align_whole_pixels: true,
 		}
 	}
 }
@@ -108,7 +110,12 @@ impl ImtShaper {
 		let mut y = 0.0;
 		let line_spacing = ((opts.text_height / 18.0).floor() + opts.line_spacing)
 			/ (font_props.scaler * opts.text_height);
-		let vert_adv = font_props.line_gap + font_props.ascender + line_spacing;
+		let mut vert_adv = font_props.line_gap + font_props.ascender + line_spacing;
+
+		if opts.align_whole_pixels {
+			vert_adv = vert_adv.ceil();
+		}
+
 		let mut lines: Vec<(usize, usize, f32)> = Vec::new();
 
 		'line: loop {
@@ -170,12 +177,23 @@ impl ImtShaper {
 
 				line_max_x = lmaxx;
 
-				imt_shaped_glyphs[shape_from + i].position = ImtPosition {
-					x: glyph_x + x_offset,
-					y: glyph_y,
+				imt_shaped_glyphs[shape_from + i].position = if opts.align_whole_pixels {
+					ImtPosition {
+						x: (glyph_x + x_offset).ceil(),
+						y: glyph_y.ceil(),
+					}
+				} else {
+					ImtPosition {
+						x: glyph_x + x_offset,
+						y: glyph_y,
+					}
 				};
 
-				x += imt_shaped_glyphs[shape_from + i].parsed.hori_adv;
+				x += if opts.align_whole_pixels {
+					imt_shaped_glyphs[shape_from + i].parsed.hori_adv.ceil()
+				} else {
+					imt_shaped_glyphs[shape_from + i].parsed.hori_adv
+				};
 			}
 
 			lines.push((shape_from, shape_from + infos_len, line_max_x));

@@ -1,5 +1,5 @@
 use crate::{
-	ImtError, ImtErrorSrc, ImtErrorTy, ImtGlyph, ImtLang, ImtParser, ImtRaster, ImtRasterOps,
+	ImtError, ImtErrorSrc, ImtErrorTy, ImtGlyph, ImtLang, ImtParser, ImtRaster, ImtRasterOpts,
 	ImtScript, ImtShapeOpts, ImtShaper,
 };
 use std::{fs::File, io::Read, path::Path, sync::Arc};
@@ -36,7 +36,7 @@ impl ImtFont {
 	pub fn from_file<F: Into<String>, P: AsRef<Path>>(
 		family: F,
 		weight: ImtWeight,
-		raster_ops: ImtRasterOps,
+		raster_ops: ImtRasterOpts,
 		device: Arc<Device>,
 		queue: Arc<Queue>,
 		path: P,
@@ -53,7 +53,7 @@ impl ImtFont {
 	pub fn from_bytes<F: Into<String>>(
 		family: F,
 		weight: ImtWeight,
-		raster_ops: ImtRasterOps,
+		raster_ops: ImtRasterOpts,
 		device: Arc<Device>,
 		queue: Arc<Queue>,
 		bytes: Vec<u8>,
