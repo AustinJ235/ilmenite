@@ -7,7 +7,5 @@ publish = false
 [dependencies]
 basalt = { path = "../../basalt" }
 
-[patch.'https://github.com/austinj235/ilmenite']
+[patch.crates-io]
 ilmenite = { path = "../" }
-vulkano = "0.18.0"
-vulkano-shaders = "0.18.0"
