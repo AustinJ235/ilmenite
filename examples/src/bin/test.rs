@@ -3,6 +3,8 @@ extern crate basalt;
 use basalt::Basalt;
 use basalt::interface::bin::{self,BinStyle,BinPosition,Color};
 
+const CYCLE_COLOR: bool = false;
+
 fn main() {
 	Basalt::initialize(
 		basalt::Options::default()
@@ -21,7 +23,7 @@ fn main() {
 				pos_from_b: Some(0.0),
 				pos_from_l: Some(0.0),
 				pos_from_r: Some(0.0),
-				back_color: Some(Color::srgb_hex("303030")),
+				back_color: Some(Color::srgb_hex("000000")),
 				.. BinStyle::default()
 			});
 	
@@ -114,6 +116,11 @@ fn main() {
 			loop {
 				if basalt.wants_exit() {
 					break;
+				}
+
+				if !CYCLE_COLOR {
+					::std::thread::sleep(::std::time::Duration::from_millis(15));
+					continue;
 				}
 				
 				let mut color = Color {
