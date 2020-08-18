@@ -62,10 +62,11 @@ float get_cell_value(vec2 tl_corner, vec2 bl_corner, vec2 tr_corner, vec2 br_cor
 	int tr_hits = 0;
 	int br_hits = 0;
 	float pixel_width = w / glyph.scaler;
-	float tl_min_dist = pixel_width / 2.0;
-	float bl_min_dist = pixel_width / 2.0;
-	float tr_min_dist = pixel_width / 2.0;
-	float br_min_dist = pixel_width / 2.0;
+	float max_ray_dist = sqrt(2 * pow(pixel_width / 2.0, 2.0));
+	float tl_min_dist = max_ray_dist;
+	float bl_min_dist = max_ray_dist;
+	float tr_min_dist = max_ray_dist;
+	float br_min_dist = max_ray_dist;
 	vec2 intersect_point = vec2(0.0);
 
 	for (uint line_i = 0; line_i < glyph.lines; line_i++) {
@@ -94,10 +95,10 @@ float get_cell_value(vec2 tl_corner, vec2 bl_corner, vec2 tr_corner, vec2 br_cor
 	float value = 0.0;
 
 	if(hits % 2 != 0) {
-		vec2 tl_point = (tl_min_dist / (pixel_width / 2.0)) * vec2(-0.5, 0.5);
-		vec2 tr_point = (tr_min_dist / (pixel_width / 2.0)) * vec2(0.5, 0.5);
-		vec2 bl_point = (bl_min_dist / (pixel_width / 2.0)) * vec2(-0.5, -0.5);
-		vec2 br_point = (br_min_dist / (pixel_width / 2.0)) * vec2(0.5, -0.5);
+		vec2 tl_point = (tl_min_dist / max_ray_dist) * vec2(-0.5, 0.5);
+		vec2 tr_point = (tr_min_dist / max_ray_dist) * vec2(0.5, 0.5);
+		vec2 bl_point = (bl_min_dist / max_ray_dist) * vec2(-0.5, -0.5);
+		vec2 br_point = (br_min_dist / max_ray_dist) * vec2(0.5, -0.5);
 		float top_length = distance(tl_point, tr_point);
 		float bottom_length = distance(bl_point, br_point);
 		float left_length = distance(tl_point, bl_point);
@@ -131,9 +132,10 @@ void main() {
 	float c2r2 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(cell_w_glyph_sp * 2.0, cell_w_glyph_sp * 2.0));
 	float avg = (c0r0 + c1r0 + c2r0, c0r1 + c1r1 + c2r1 + c0r2 + c1r2 + c2r2) / 9.0;
 	uint index = ((gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x) * 4;
-	bitmap.data[index] = ((c0r0 + c0r1 + c0r2) / 3.0);
-	bitmap.data[index + 1] = ((c1r0 + c1r1 + c1r2) / 3.0);
-	bitmap.data[index + 2] = ((c2r0 + c2r1 + c2r2) / 3.0);
+	float hinting_amt = 0.2;
+	bitmap.data[index] = mix(avg, ((c0r0 + c0r1 + c0r2) / 3.0), hinting_amt);
+	bitmap.data[index + 1] = mix(avg, ((c1r0 + c1r1 + c1r2) / 3.0), hinting_amt);
+	bitmap.data[index + 2] = mix(avg, ((c2r0 + c2r1 + c2r2) / 3.0), hinting_amt);
 	bitmap.data[index + 3] = avg;
 }
 	"}
