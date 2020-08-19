@@ -3,7 +3,7 @@ extern crate basalt;
 use basalt::Basalt;
 use basalt::interface::bin::{self,BinStyle,BinPosition,Color};
 
-const CYCLE_COLOR: bool = false;
+const CYCLE_COLOR: bool = true;
 
 fn main() {
 	Basalt::initialize(

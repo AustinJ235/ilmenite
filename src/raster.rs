@@ -73,25 +73,30 @@ impl ImtRaster {
 		opts: ImtRasterOpts,
 	) -> Result<Self, ImtError> {
 		let glyph_cs = glyph_cs::Shader::load(device.clone()).unwrap();
-		let sample_count = match &opts.sample_quality {
-			ImtSampleQuality::Fast => 9,
-			ImtSampleQuality::Normal => 16,
-			ImtSampleQuality::Best => 25,
+
+		let sample_data: Vec<[f32; 4]> = match &opts.sample_quality {
+			ImtSampleQuality::Fast => unimplemented!(),
+			ImtSampleQuality::Normal => {
+				let mut sample_data: Vec<[f32; 4]> = Vec::with_capacity(36);
+
+				for x in 1..7 {
+					for y in 1..7 {
+						sample_data.push([
+							x as f32 / 7.0,
+							y as f32 / 7.0,
+							1.0 / 6.0,
+							1.0 / 12.0,
+						]);
+					}
+				}
+
+				sample_data
+			},
+			ImtSampleQuality::Best => unimplemented!()
 		};
 
-		let mut sample_data: Vec<[f32; 4]> = Vec::with_capacity(sample_count);
-		let w = (sample_count as f32).sqrt() as usize;
-
-		for x in 1..=w {
-			for y in 1..=w {
-				sample_data.push([
-					((x as f32 / (w as f32 + 1.0)) * 2.0) - 1.0,
-					((y as f32 / (w as f32 + 1.0)) * 2.0) - 1.0,
-					0.0,
-					0.0,
-				]);
-			}
-		}
+		let sample_count = sample_data.len();
+		assert!(sample_count % 3 == 0);
 
 		let sample_data_cpu_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> =
 			CpuAccessibleBuffer::from_iter(

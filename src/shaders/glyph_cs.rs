@@ -48,15 +48,21 @@ bool ray_intersects(vec2 l1p1, vec2 l1p2, vec2 l2p1, vec2 l2p2, out vec2 point) 
 	}
 }
 
-vec2 pixel_to_glyph_space(float x, float y) {
-	vec2 transformed = vec2(x, y * -1.0);
-	transformed -= glyph.offset;
-	transformed /= glyph.scaler;
-	transformed += glyph.bounds.xw;
-	return transformed;
+vec2 pixel_to_glyph_space(vec2 point) {
+	point.y *= -1.0;
+	point -= glyph.offset;
+	point /= glyph.scaler;
+	point += glyph.bounds.xw;
+	return point;
 }
 
-float get_cell_value(vec2 tl_corner, vec2 bl_corner, vec2 tr_corner, vec2 br_corner, float w, vec2 point) {
+float get_cell_value(float w, vec2 point) {
+	float outer_dim = float(max(glyph.width, glyph.height)) * 2.0;
+	vec2 tl_corner = pixel_to_glyph_space(point + vec2(-outer_dim, outer_dim));
+	vec2 bl_corner = pixel_to_glyph_space(point + vec2(-outer_dim, -outer_dim));
+	vec2 tr_corner = pixel_to_glyph_space(point + vec2(outer_dim, outer_dim));
+	vec2 br_corner = pixel_to_glyph_space(point + vec2(outer_dim, -outer_dim));
+	point = pixel_to_glyph_space(point);
 	int tl_hits = 0;
 	int bl_hits = 0;
 	int tr_hits = 0;
@@ -113,30 +119,34 @@ float get_cell_value(vec2 tl_corner, vec2 bl_corner, vec2 tr_corner, vec2 br_cor
 }
 
 void main() {
-	uint outer_dim = max(glyph.width, glyph.height) + 2;
-	vec2 tl_corner = pixel_to_glyph_space(0, 0);
-	vec2 bl_corner = pixel_to_glyph_space(0, outer_dim);
-	vec2 tr_corner = pixel_to_glyph_space(outer_dim, 0);
-	vec2 br_corner = pixel_to_glyph_space(outer_dim, outer_dim);
-	vec2 inv_point = pixel_to_glyph_space(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-	float cell_w_pixel_sp = 1.0 / 3.0;
-	float cell_w_glyph_sp = cell_w_pixel_sp / glyph.scaler;
-	float c0r0 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point);
-	float c1r0 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(cell_w_glyph_sp, 0.0));
-	float c2r0 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(cell_w_glyph_sp * 2.0, 0.0));
-	float c0r1 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(0.0, cell_w_glyph_sp));
-	float c1r1 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(cell_w_glyph_sp, cell_w_glyph_sp));
-	float c2r1 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(cell_w_glyph_sp * 2.0, cell_w_glyph_sp));
-	float c0r2 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(0.0, cell_w_glyph_sp * 2.0));
-	float c1r2 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(cell_w_glyph_sp, cell_w_glyph_sp * 2.0));
-	float c2r2 = get_cell_value(tl_corner, bl_corner, tr_corner, br_corner, cell_w_pixel_sp, inv_point + vec2(cell_w_glyph_sp * 2.0, cell_w_glyph_sp * 2.0));
-	float avg = (c0r0 + c1r0 + c2r0, c0r1 + c1r1 + c2r1 + c0r2 + c1r2 + c2r2) / 9.0;
+	vec2 point = vec2(float(gl_GlobalInvocationID.x), float(gl_GlobalInvocationID.y));
+	vec3 value = vec3(0.0);
+
+	for (uint sample_i = 0; sample_i < glyph.samples; sample_i++) {
+		if(sample_i < glyph.samples / 3) { // R
+			value.r += get_cell_value(
+				samples.offset[sample_i].z,
+				point + samples.offset[sample_i].xy
+			) * samples.offset[sample_i].w;
+		} else if(sample_i < (glyph.samples / 3) * 2) { // G
+			value.g += get_cell_value(
+				samples.offset[sample_i].z,
+				point + samples.offset[sample_i].xy
+			) * samples.offset[sample_i].w;
+		} else { // B
+			value.b += get_cell_value(
+				samples.offset[sample_i].z,
+				point + samples.offset[sample_i].xy
+			) * samples.offset[sample_i].w;
+		}
+	}
+
+	float average = (value.r + value.g + value.b) / 3.0;
 	uint index = ((gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x) * 4;
-	float hinting_amt = 0.2;
-	bitmap.data[index] = mix(avg, ((c0r0 + c0r1 + c0r2) / 3.0), hinting_amt);
-	bitmap.data[index + 1] = mix(avg, ((c1r0 + c1r1 + c1r2) / 3.0), hinting_amt);
-	bitmap.data[index + 2] = mix(avg, ((c2r0 + c2r1 + c2r2) / 3.0), hinting_amt);
-	bitmap.data[index + 3] = avg;
+	bitmap.data[index] = mix(average, value.r, 0.2);
+	bitmap.data[index + 1] = mix(average, value.g, 0.2);
+	bitmap.data[index + 2] = mix(average, value.b, 0.2);
+	bitmap.data[index + 3] = average;
 }
 	"}
 }
