@@ -238,7 +238,7 @@ impl ImtRaster {
 		let height_key = OrderedFloat::from(text_height);
 
 		'glyphs: for shaped in shaped_glyphs {
-			let index = shaped.parsed.inner.glyph_index.unwrap();
+			let index = shaped.parsed.inner.glyph_index;
 
 			// Acquire a lock to the cache if it isn't already present
 			if cache_lk_op.is_none() {

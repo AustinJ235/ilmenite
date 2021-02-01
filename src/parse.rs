@@ -2,15 +2,15 @@ use crate::{ImtError, ImtErrorSrc, ImtErrorTy, ImtGeometry, ImtLang, ImtPoint, I
 
 use allsorts::{
 	binary::read::ReadScope,
-	font_data_impl::read_cmap_subtable,
-	gpos::{gpos_apply, Info},
-	gsub::{gsub_apply_default, GlyphOrigin, RawGlyph},
+	font::read_cmap_subtable,
+	gpos::{self, Info},
+	gsub::{self, GlyphOrigin, RawGlyph},
 	layout::{new_layout_cache, GDEFTable, LayoutCache, LayoutTable, GPOS, GSUB},
 	tables::{
 		cmap::{Cmap, CmapSubtable},
 		glyf::{self, CompositeGlyphArgument, GlyfRecord, GlyfTable},
 		loca::LocaTable,
-		HeadTable, HheaTable, HmtxTable, MaxpTable, OpenTypeFile, OpenTypeFont,
+		HeadTable, HheaTable, HmtxTable, MaxpTable, OpenTypeData, OpenTypeFont,
 	},
 	tag,
 };
@@ -99,7 +99,7 @@ impl ImtParser {
 					return;
 				}
 
-				while let Ok(req) = requests.pop() {
+				while let Some(req) = requests.pop() {
 					match req {
 						ParserReq::FontProps(res) => res.set(Ok(parser.font_props())),
 						ParserReq::RetrieveText(res, text, script, lang) => {
@@ -212,16 +212,16 @@ pub struct ImtParsedGlyph {
 
 impl ImtParserNonSend {
 	pub fn new(bytes: Vec<u8>) -> Result<Self, ImtError> {
-		let OpenTypeFile {
+		let OpenTypeFont {
 			scope,
-			font,
+			data,
 		} = ReadScope::new(unsafe { &*(bytes.as_ref() as *const _) })
-			.read::<OpenTypeFile>()
+			.read::<OpenTypeFont>()
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::File, e))?;
 
-		let otf = match font {
-			OpenTypeFont::Single(t) => t,
-			OpenTypeFont::Collection(_) =>
+		let otf = match data {
+			OpenTypeData::Single(t) => t,
+			_=>
 				return Err(ImtError::src_and_ty(
 					ImtErrorSrc::File,
 					ImtErrorTy::FileUnsupportedFormat,
@@ -349,7 +349,7 @@ impl ImtParserNonSend {
 			head,
 			maxp,
 			cmap,
-			cmap_sub,
+			cmap_sub: cmap_sub.1,
 			hhea,
 			hmtx,
 			loca,
@@ -371,18 +371,17 @@ impl ImtParserNonSend {
 		script: ImtScript,
 		lang: ImtLang,
 	) -> Result<Vec<Info>, ImtError> {
-		let mut infos = Info::init_from_glyphs(self.gdef_op.as_ref(), raw_glyphs)
-			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GsubInfo, e))?;
+		let mut infos = Info::init_from_glyphs(self.gdef_op.as_ref(), raw_glyphs);
 
 		if let Some(gpos) = self.gpos_op.take() {
 			let gpos_rc = Rc::new(gpos);
 
-			gpos_apply(
+			gpos::apply(
 				&gpos_rc,
 				self.gdef_op.as_ref(),
 				true,
 				script.tag(),
-				lang.tag(),
+				Some(lang.tag()),
 				&mut infos,
 			)
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GPOS, e))?;
@@ -394,23 +393,21 @@ impl ImtParserNonSend {
 	}
 
 	fn glyph_for_char(&mut self, c: char) -> Result<RawGlyph<()>, ImtError> {
-		let index = Some(
-			self.cmap_sub
-				.map_glyph(c as u32)
-				.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
-				.unwrap_or(
-					self.cmap_sub
-						.map_glyph('?' as u32)
-						.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
-						.ok_or(ImtError::src_and_ty(
-							ImtErrorSrc::Cmap,
-							ImtErrorTy::MissingGlyph,
-						))?,
-				),
-		);
+		let index = self.cmap_sub
+			.map_glyph(c as u32)
+			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
+			.unwrap_or(
+				self.cmap_sub
+					.map_glyph('?' as u32)
+					.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
+					.ok_or(ImtError::src_and_ty(
+						ImtErrorSrc::Cmap,
+						ImtErrorTy::MissingGlyph,
+					))?,
+			);
 
 		Ok(RawGlyph {
-			unicodes: vec![c],
+			unicodes: [c].into(),
 			glyph_index: index,
 			liga_component_pos: 0,
 			glyph_origin: GlyphOrigin::Char(c),
@@ -420,6 +417,7 @@ impl ImtParserNonSend {
 			fake_bold: false,
 			fake_italic: false,
 			extra_data: (),
+			variation: None,
 		})
 	}
 
@@ -438,13 +436,13 @@ impl ImtParserNonSend {
 		let sub_glyph = self.glyph_for_char('?')?;
 
 		if let &Some(ref gsub) = &self.gsub_op {
-			gsub_apply_default(
-				&|| vec![sub_glyph.clone()],
+			gsub::apply(
+				sub_glyph.glyph_index,
 				&gsub,
 				self.gdef_op.as_ref(),
 				script.tag(),
-				lang.tag(),
-				false,
+				Some(lang.tag()),
+				&gsub::Features::Mask(gsub::GsubFeatureMask::default()),
 				self.maxp.num_glyphs,
 				&mut glyphs,
 			)
@@ -454,7 +452,7 @@ impl ImtParserNonSend {
 		let mut imt_raw_glyphs = Vec::new();
 
 		for glyph in glyphs {
-			let index = glyph.glyph_index.unwrap();
+			let index = glyph.glyph_index;
 
 			if self.parsed_glyphs.get(&index).is_none() {
 				let mut geometry_indexes: Vec<(u16, f32, f32)> = vec![(index, 0.0, 0.0)];

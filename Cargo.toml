@@ -1,6 +1,6 @@
 [package]
 name = "ilmenite"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Austin Johnson <me@austinj.me>"]
 repository = "https://github.com/AustinJ235/ilmenite"
 documentation = "https://docs.rs/ilmenite"
@@ -14,9 +14,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vulkano = "0.19.0"
-vulkano-shaders = "0.19.0"
-allsorts = "0.3.0"
-ordered-float = "1.0.2"
-parking_lot = "0.10.0"
-crossbeam = "0.7.3"
+vulkano = "0.20.0"
+vulkano-shaders = "0.20.0"
+allsorts = "0.5.1"
+ordered-float = "2.0.1"
+parking_lot = "0.11.1"
+crossbeam = "0.8.0"

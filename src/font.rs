@@ -113,7 +113,7 @@ impl ImtFont {
 					crop_y: g.shaped.y_overflow * font_props.scaler * text_height,
 					family: self.family.clone(),
 					weight: self.weight.clone(),
-					index: g.shaped.parsed.inner.glyph_index.unwrap(),
+					index: g.shaped.parsed.inner.glyph_index,
 					bitmap: g.bitmap.data.clone(),
 				}
 			})

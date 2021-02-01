@@ -154,6 +154,7 @@ impl ImtGlyphBitmap {
 				raster.device(),
 				&raster.glyph_shader().main_entry_point(),
 				&(),
+				None,
 			)
 			.unwrap(),
 		);
