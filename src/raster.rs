@@ -5,10 +5,12 @@ use parking_lot::Mutex;
 use std::{collections::BTreeMap, iter, sync::Arc};
 use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, device_local::DeviceLocalBuffer, BufferUsage},
-	command_buffer::{AutoCommandBufferBuilder, CommandBuffer},
+	command_buffer::AutoCommandBufferBuilder,
 	device::{Device, Queue},
 	sync::GpuFuture,
 };
+use vulkano::command_buffer::PrimaryCommandBuffer;
+use vulkano::command_buffer::CommandBufferUsage;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtFillQuality {
@@ -159,7 +161,11 @@ impl ImtRaster {
 		.unwrap();
 
 		let mut cmd_buf =
-			AutoCommandBufferBuilder::new(device.clone(), queue.family()).unwrap();
+			AutoCommandBufferBuilder::primary(
+				device.clone(),
+				queue.family(),
+				CommandBufferUsage::OneTimeSubmit
+			).unwrap();
 
 		cmd_buf
 			.copy_buffer(sample_data_cpu_buf.clone(), sample_data_dev_buf.clone())

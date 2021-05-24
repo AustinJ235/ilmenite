@@ -7,11 +7,14 @@ use crate::vulkano::descriptor::PipelineLayoutAbstract;
 use std::sync::Arc;
 use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, BufferUsage},
-	command_buffer::{AutoCommandBufferBuilder, CommandBuffer},
+	command_buffer::{AutoCommandBufferBuilder},
 	descriptor::descriptor_set::PersistentDescriptorSet,
 	pipeline::ComputePipeline,
 	sync::GpuFuture,
 };
+use vulkano::command_buffer::CommandBufferUsage;
+use std::iter;
+use vulkano::command_buffer::PrimaryCommandBuffer;
 
 /// Data is Linear RGBA
 #[derive(Clone)]
@@ -175,13 +178,14 @@ impl ImtGlyphBitmap {
 		.build()
 		.unwrap();
 
-		let mut cmd_buf = AutoCommandBufferBuilder::primary_one_time_submit(
+		let mut cmd_buf = AutoCommandBufferBuilder::primary(
 			raster.device(),
 			raster.queue_ref().family(),
+			CommandBufferUsage::OneTimeSubmit
 		)
 		.unwrap();
 
-		cmd_buf.dispatch([self.width, self.height, 1], pipeline, descriptor_set, (), std::iter::empty()).unwrap();
+		cmd_buf.dispatch([self.width, self.height, 1], pipeline, descriptor_set, (), iter::empty()).unwrap();
 
 		cmd_buf
 			.build()
