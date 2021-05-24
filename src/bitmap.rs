@@ -181,7 +181,7 @@ impl ImtGlyphBitmap {
 		)
 		.unwrap();
 
-		cmd_buf.dispatch([self.width, self.height, 1], pipeline, descriptor_set, ()).unwrap();
+		cmd_buf.dispatch([self.width, self.height, 1], pipeline, descriptor_set, (), std::iter::empty()).unwrap();
 
 		cmd_buf
 			.build()
