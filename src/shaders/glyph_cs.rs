@@ -6,15 +6,15 @@ pub mod glyph_cs {
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout(set = 0, binding = 0) buffer SampleData {
+layout(set = 0, binding = 0) readonly buffer SampleData {
 	highp vec4 offset[];
 } samples;
 
-layout(set = 0, binding = 1) buffer RayData {
+layout(set = 0, binding = 1) readonly buffer RayData {
 	highp vec4 direction[];
 } rays;
 
-layout(set = 0, binding = 2) buffer LineData {
+layout(set = 0, binding = 2) readonly buffer LineData {
 	highp vec4 point[];
 } lines;
 
@@ -22,7 +22,7 @@ layout(set = 0, binding = 3) buffer BitmapData {
 	highp float data[];
 } bitmap;
 
-layout(set = 0, binding = 4) buffer GlyphData {
+layout(set = 0, binding = 4) readonly buffer GlyphData {
 	uint samples;
 	uint rays;
 	uint lines;
