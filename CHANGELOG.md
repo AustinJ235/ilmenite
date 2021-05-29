@@ -1,6 +1,7 @@
 # Unreleased
 
 - **breaking** Update dependency `vulkano` & `vulkano-shaders` to `0.23.0`
+- Update dependency `ordered-float` from `2.0` to `2.5`.
 
 # Version 0.2.0 (January 31st, 2021)
 

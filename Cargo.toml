@@ -1,6 +1,6 @@
 [package]
 name = "ilmenite"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Austin Johnson <me@austinj.me>"]
 repository = "https://github.com/AustinJ235/ilmenite"
 documentation = "https://docs.rs/ilmenite"
@@ -17,6 +17,6 @@ edition = "2018"
 vulkano = "0.23.0"
 vulkano-shaders = "0.23.0"
 allsorts = "0.5.1"
-ordered-float = "2.0.1"
+ordered-float = "2.5.0"
 parking_lot = "0.11.1"
 crossbeam = "0.8.0"
