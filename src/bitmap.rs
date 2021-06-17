@@ -3,7 +3,6 @@ use crate::{
 	ImtRasterOpts,
 };
 
-use crate::vulkano::descriptor::PipelineLayoutAbstract;
 use std::sync::Arc;
 use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, BufferUsage},
@@ -15,6 +14,7 @@ use vulkano::{
 use vulkano::command_buffer::CommandBufferUsage;
 use std::iter;
 use vulkano::command_buffer::PrimaryCommandBuffer;
+use vulkano::pipeline::ComputePipelineAbstract;
 
 /// Data is Linear RGBA
 #[derive(Clone)]
@@ -130,6 +130,7 @@ impl ImtGlyphBitmap {
 				raster.device(),
 				BufferUsage {
 					storage_buffer: true,
+					uniform_buffer: true,
 					..BufferUsage::none()
 				},
 				false,
