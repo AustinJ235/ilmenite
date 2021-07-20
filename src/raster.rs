@@ -29,6 +29,7 @@ pub struct ImtRasterOpts {
 	pub fill_quality: ImtFillQuality,
 	pub sample_quality: ImtSampleQuality,
 	pub align_whole_pixels: bool,
+	pub cpu_rasterization: bool,
 }
 
 impl Default for ImtRasterOpts {
@@ -37,6 +38,7 @@ impl Default for ImtRasterOpts {
 			fill_quality: ImtFillQuality::Normal,
 			sample_quality: ImtSampleQuality::Normal,
 			align_whole_pixels: true,
+			cpu_rasterization: true,
 		}
 	}
 }
@@ -331,7 +333,13 @@ impl ImtRaster {
 				ImtGlyphBitmap::new(parser, shaped.parsed.clone(), text_height, &self.opts);
 			bitmap.create_outline();
 
-			if let Err(e) = bitmap.raster(self) {
+			let raster_result = if self.opts.cpu_rasterization {
+				bitmap.raster_cpu(self)
+			} else {
+				bitmap.raster(self)
+			};
+
+			if let Err(e) = raster_result {
 				// Seems we have errored, up the cache and inform other threads.
 				// Reobtain the lock
 				cache_lk_op = Some(self.cache.lock());

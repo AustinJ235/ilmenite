@@ -130,7 +130,7 @@ impl ImtGlyphBitmap {
 		let cell_height = self.scaler / (sample_count as f32).sqrt();
 		let cell_width = cell_height / 3.0;
 
-		let mut sample_filled = |ray_src: [f32; 2], ray_len: f32| -> Option<f32> {
+		let sample_filled = |ray_src: [f32; 2], ray_len: f32| -> Option<f32> {
 			let mut least_hits = -1;
 			let mut ray_min_dist_sum = 0.0;
 
@@ -239,8 +239,6 @@ impl ImtGlyphBitmap {
 		if self.width == 0 || self.height == 0 {
 			return Ok(());
 		}
-
-		return self.raster_cpu(raster);
 
 		let mut line_data = Vec::with_capacity(self.lines.len());
 

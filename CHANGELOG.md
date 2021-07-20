@@ -1,5 +1,14 @@
 # Unreleased
 
+# Version 0.4.1 (July 20th, 2021)
+
+- `ImtRasterOpts` now has `cpu_rasterization` option to specify if cpu should be used instead of gpu for rasterization. Nvidia seems to be broken currently for gpu rasterization, so as a result this currently defaults to `true`.
+- `ImtGlyphBitmap` now has the method `raster_cpu` to rasterize on the cpu instead of gpu.
+
+# Version 0.4.0 (July 4th, 2021)
+
+- **breaking** Update dependency `vulkano` & `vulkano-shaders` to `0.24.0`.
+
 # Version 0.3.0 (May 29th, 2021)
 
 - **breaking** Update dependency `vulkano` & `vulkano-shaders` to `0.23.0`
