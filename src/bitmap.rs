@@ -3,18 +3,14 @@ use crate::{
 	ImtRasterOpts,
 };
 
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 use vulkano::{
 	buffer::{cpu_access::CpuAccessibleBuffer, BufferUsage},
-	command_buffer::{AutoCommandBufferBuilder},
+	command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer},
 	descriptor::descriptor_set::PersistentDescriptorSet,
-	pipeline::ComputePipeline,
+	pipeline::{ComputePipeline, ComputePipelineAbstract},
 	sync::GpuFuture,
 };
-use vulkano::command_buffer::CommandBufferUsage;
-use std::iter;
-use vulkano::command_buffer::PrimaryCommandBuffer;
-use vulkano::pipeline::ComputePipelineAbstract;
 
 /// Data is Linear RGBA
 #[derive(Clone)]
@@ -113,34 +109,37 @@ impl ImtGlyphBitmap {
 			}
 		}
 
-		let ray_intersects = |l1p1: [f32; 2], l1p2: [f32; 2], l2p1: [f32; 2], l2p2: [f32; 2]| -> Option<[f32; 2]> {
+		let ray_intersects = |l1p1: [f32; 2],
+		                      l1p2: [f32; 2],
+		                      l2p1: [f32; 2],
+		                      l2p2: [f32; 2]|
+		 -> Option<[f32; 2]> {
 			let r = [l1p2[0] - l1p1[0], l1p2[1] - l1p1[1]];
 			let s = [l2p2[0] - l2p1[0], l2p2[1] - l2p1[1]];
-			let det = r[0] * s[1] - r[1] * s[0];
-			let u = ((l2p1[0] - l1p1[0]) * r[1] - (l2p1[1] - l1p1[1]) * r[0]) / det;
-			let t = ((l2p1[0] - l1p1[0]) * s[1] - (l2p1[1] - l1p1[1]) * s[0]) / det;
+			let det = (r[0] * s[1]) - (r[1] * s[0]);
+			let u = (((l2p1[0] - l1p1[0]) * r[1]) - ((l2p1[1] - l1p1[1]) * r[0])) / det;
+			let t = (((l2p1[0] - l1p1[0]) * s[1]) - ((l2p1[1] - l1p1[1]) * s[0])) / det;
 
 			if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 {
-				Some([l1p1[0] + r[0] * t, l1p1[1] + r[1] * t])
+				Some([(l1p1[0] + r[0]) * t, (l1p1[1] + r[1]) * t])
 			} else {
 				None
 			}
 		};
 
-		let sample_filled = |ray_src: [f32; 2], ray_len: f32| -> Option<f32> {
-			let mut least_hits = -1_isize;
+		let cell_height = self.scaler / (sample_count as f32).sqrt();
+		let cell_width = cell_height / 3.0;
+
+		let mut sample_filled = |ray_src: [f32; 2], ray_len: f32| -> Option<f32> {
+			let mut least_hits = -1;
 			let mut ray_min_dist_sum = 0.0;
 
 			for ray in rays.iter() {
 				let mut hits = 0_isize;
 
-				let ray_dest = [
-					ray_src[0] + (ray[0] * ray_len),
-					ray_src[1] + (ray[1] * ray_len),
-				];
+				let ray_dest =
+					[ray_src[0] + (ray[0] * ray_len), ray_src[1] + (ray[1] * ray_len)];
 
-				let cell_height = self.scaler / (sample_count as f32).sqrt();
-				let cell_width = cell_height / 3.0;
 				let ray_angle = (ray[1] / ray[0]).atan();
 				let mut ray_max_dist = (cell_width / 2.0) / ray_angle.cos();
 
@@ -151,53 +150,61 @@ impl ImtGlyphBitmap {
 				let mut ray_min_dist = ray_max_dist;
 
 				for line in self.lines.iter() {
-					match ray_intersects(ray_src, ray_dest, [line.0.x, line.0.y], [line.1.x, line.1.y]) {
+					match ray_intersects(ray_src, ray_dest, [line.0.x, line.0.y], [
+						line.1.x, line.1.y,
+					]) {
 						Some(intersect_point) => {
-							let dist = ((ray_src[0] - intersect_point[0]).powi(2) + (ray_src[1] - intersect_point[1]).powi(2)).sqrt();
+							let dist = ((ray_src[0] - intersect_point[0]).powi(2)
+								+ (ray_src[1] - intersect_point[1]).powi(2))
+							.sqrt();
 
 							if dist < ray_min_dist {
 								ray_min_dist = dist;
 							}
 
 							hits += 1;
-						}, None => ()
+						},
+						None => (),
 					}
 				}
 
 				ray_min_dist_sum += ray_min_dist / ray_max_dist;
 
-				if hits == -1 || hits < least_hits {
+				if least_hits == -1 || hits < least_hits {
 					least_hits = hits;
 				}
 			}
 
-			if least_hits % 2 == 0 {
+			if least_hits != -1 && least_hits % 2 != 0 {
 				Some(ray_min_dist_sum / ray_count as f32)
 			} else {
 				None
 			}
 		};
 
-		let transform_coords = |coords: [usize; 2], offset_i: usize, offset: [f32; 2]| -> [f32; 2] {
-			let mut coords = [coords[0] as f32, coords[1] as f32 * -1.0];
-			coords[0] -= self.offset_x;
-			coords[1] -= self.offset_y;
-			coords[0] += samples[offset_i][0];
-			coords[1] += samples[offset_i][1];
-			coords[0] += offset[0];
-			coords[1] += offset[1];
-			coords[0] /= self.scaler;
-			coords[1] /= self.scaler;
-			coords[0] += self.parsed.min_x;
-			coords[1] += self.parsed.max_y;
-			coords
-		};
+		let transform_coords =
+			|coords: [usize; 2], offset_i: usize, offset: [f32; 2]| -> [f32; 2] {
+				let mut coords = [coords[0] as f32, coords[1] as f32 * -1.0];
+				coords[0] -= self.offset_x;
+				coords[1] -= self.offset_y;
+				coords[0] += samples[offset_i][0];
+				coords[1] += samples[offset_i][1];
+				coords[0] += offset[0];
+				coords[1] += offset[1];
+				coords[0] /= self.scaler;
+				coords[1] /= self.scaler;
+				coords[0] += self.parsed.min_x;
+				coords[1] += self.parsed.max_y;
+				coords
+			};
 
 		let get_value = |coords: [usize; 2], offset: [f32; 2], ray_len: f32| -> f32 {
 			let mut fill_amt_sum = 0.0;
 
 			for i in 0..sample_count {
-				if let Some(fill_amt) = sample_filled(transform_coords(coords, i, offset), ray_len) {
+				if let Some(fill_amt) =
+					sample_filled(transform_coords(coords, i, offset), ray_len)
+				{
 					fill_amt_sum += fill_amt;
 				}
 			}
@@ -206,18 +213,21 @@ impl ImtGlyphBitmap {
 		};
 
 		let mut bitmap: Vec<f32> = Vec::with_capacity((self.width * self.height * 4) as usize);
-		let ray_len = ((self.width as f32 / self.scaler).powi(2) + (self.height as f32 / self.scaler).powi(2)).sqrt();
+		bitmap.resize((self.width * self.height * 4) as usize, 0.0);
+		let ray_len = ((self.width as f32 / self.scaler).powi(2)
+			+ (self.height as f32 / self.scaler).powi(2))
+		.sqrt();
 
 		for x in 0..self.width {
 			for y in 0..self.height {
-				let r = get_value([x as usize, y as usize], [1.0 / 6.0, 0.0], ray_len);
-				let g = get_value([x as usize, y as usize], [3.0 / 6.0, 0.0], ray_len);
-				let b = get_value([x as usize, y as usize], [5.0 / 6.0, 0.0], ray_len);
-
-				bitmap.push(r);
-				bitmap.push(g);
-				bitmap.push(b);
-				bitmap.push((r + g + b) / 3.0);
+				let rindex = (((y * self.width) + x) * 4) as usize;
+				bitmap[rindex] = get_value([x as usize, y as usize], [1.0 / 6.0, 0.0], ray_len);
+				bitmap[rindex + 1] =
+					get_value([x as usize, y as usize], [3.0 / 6.0, 0.0], ray_len);
+				bitmap[rindex + 2] =
+					get_value([x as usize, y as usize], [5.0 / 6.0, 0.0], ray_len);
+				bitmap[rindex + 3] =
+					(bitmap[rindex] + bitmap[rindex + 1] + bitmap[rindex + 2]) / 3.0;
 			}
 		}
 
@@ -318,11 +328,13 @@ impl ImtGlyphBitmap {
 		let mut cmd_buf = AutoCommandBufferBuilder::primary(
 			raster.device(),
 			raster.queue_ref().family(),
-			CommandBufferUsage::OneTimeSubmit
+			CommandBufferUsage::OneTimeSubmit,
 		)
 		.unwrap();
 
-		cmd_buf.dispatch([self.width, self.height, 1], pipeline, descriptor_set, (), iter::empty()).unwrap();
+		cmd_buf
+			.dispatch([self.width, self.height, 1], pipeline, descriptor_set, (), iter::empty())
+			.unwrap();
 
 		cmd_buf
 			.build()

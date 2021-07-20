@@ -9,9 +9,9 @@
 //! 		device,
 //! 		queue,
 //! 		"MyFont.ttf",
-//! 		)
+//! 	)
 //! 	.unwrap(),
-//! 	);
+//! );
 //!
 //! let glyphs = ilmenite
 //! 	.glyphs_for_text("MyFont", ImtWeight::Normal, 12.0, None, "Hello World!")

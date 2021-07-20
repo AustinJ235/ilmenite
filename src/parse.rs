@@ -221,7 +221,7 @@ impl ImtParserNonSend {
 
 		let otf = match data {
 			OpenTypeData::Single(t) => t,
-			_=>
+			_ =>
 				return Err(ImtError::src_and_ty(
 					ImtErrorSrc::File,
 					ImtErrorTy::FileUnsupportedFormat,
@@ -393,17 +393,15 @@ impl ImtParserNonSend {
 	}
 
 	fn glyph_for_char(&mut self, c: char) -> Result<RawGlyph<()>, ImtError> {
-		let index = self.cmap_sub
+		let index = self
+			.cmap_sub
 			.map_glyph(c as u32)
 			.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
 			.unwrap_or(
 				self.cmap_sub
 					.map_glyph('?' as u32)
 					.map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
-					.ok_or(ImtError::src_and_ty(
-						ImtErrorSrc::Cmap,
-						ImtErrorTy::MissingGlyph,
-					))?,
+					.ok_or(ImtError::src_and_ty(ImtErrorSrc::Cmap, ImtErrorTy::MissingGlyph))?,
 			);
 
 		Ok(RawGlyph {
