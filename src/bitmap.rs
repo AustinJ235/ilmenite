@@ -10,6 +10,8 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
+use vulkano::format::Format;
+use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
 use vulkano::sync::GpuFuture;
 
 #[derive(Clone)]
@@ -247,40 +249,7 @@ impl ImtGlyphBitmap {
             return Ok(());
         }
 
-        let mut line_data = Vec::with_capacity(self.lines.len());
-
-        for (pt_a, pt_b) in &self.lines {
-            line_data.push([pt_a.x, pt_a.y, pt_b.x, pt_b.y]);
-        }
-
-        let line_data_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> =
-            CpuAccessibleBuffer::from_iter(
-                context.device.clone(),
-                BufferUsage {
-                    storage_buffer: true,
-                    uniform_buffer: true, // TODO: Should be false?
-                    ..BufferUsage::none()
-                },
-                false,
-                line_data.into_iter(),
-            )
-            .unwrap();
-
-        let bitmap_data_buf: Arc<CpuAccessibleBuffer<[f32]>> = unsafe {
-            CpuAccessibleBuffer::uninitialized_array(
-                context.device.clone(),
-                (self.metrics.width * self.metrics.height * 4) as usize,
-                BufferUsage {
-                    storage_buffer: true,
-                    uniform_buffer: true, // TODO: Should be false?
-                    ..BufferUsage::none()
-                },
-                true,
-            )
-            .unwrap()
-        };
-
-        let glyph_data_buf: Arc<CpuAccessibleBuffer<glyph_cs::ty::GlyphData>> =
+        let glyph_buf: Arc<CpuAccessibleBuffer<glyph_cs::ty::Glyph>> =
             CpuAccessibleBuffer::from_data(
                 context.device.clone(),
                 BufferUsage {
@@ -288,11 +257,11 @@ impl ImtGlyphBitmap {
                     ..BufferUsage::none()
                 },
                 false,
-                glyph_cs::ty::GlyphData {
-                    lines: self.lines.len() as u32,
+                glyph_cs::ty::Glyph {
                     scaler: self.scaler,
                     width: self.metrics.width,
                     height: self.metrics.height,
+                    line_count: self.lines.len() as u32,
                     bounds: [
                         self.parsed.min_x,
                         self.parsed.max_x,
@@ -304,17 +273,49 @@ impl ImtGlyphBitmap {
             )
             .unwrap();
 
+        let bitmap_img = ImtImageView::from_storage(
+            StorageImage::with_usage(
+                context.device.clone(),
+                ImageDimensions::Dim2d {
+                    width: self.metrics.width,
+                    height: self.metrics.height,
+                    array_layers: 1,
+                },
+                Format::R8G8B8A8Unorm,
+                ImageUsage {
+                    transfer_source: true,
+                    storage: true,
+                    ..ImageUsage::none()
+                },
+                ImageCreateFlags::none(),
+                iter::once(context.queue.family()),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let line_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
+            context.device.clone(),
+            BufferUsage {
+                uniform_buffer: true, // TODO: Should be storage buffer?
+                ..BufferUsage::none()
+            },
+            false,
+            self.lines.iter().map(|line| [line.0.x, line.0.y, line.1.x, line.1.y]),
+        )
+        .unwrap();
+
         let descriptor_set = context
             .set_pool
             .lock()
             .next()
             .add_buffer(context.common_buf.clone())
             .unwrap()
-            .add_buffer(line_data_buf)
+            .add_buffer(glyph_buf)
             .unwrap()
-            .add_buffer(bitmap_data_buf.clone())
+            .add_image(bitmap_img.clone())
             .unwrap()
-            .add_buffer(glyph_data_buf.clone())
+            .add_buffer(line_buf)
             .unwrap()
             .build()
             .unwrap();
@@ -346,9 +347,52 @@ impl ImtGlyphBitmap {
             .wait(None)
             .unwrap();
 
-        self.data = Some(ImtBitmapData::LRGBA(Arc::new(
-            bitmap_data_buf.read().unwrap().iter().cloned().collect(),
-        )));
+        if !context.raster_to_image {
+            let len = (self.metrics.width * self.metrics.height * 4) as usize;
+            let bitmap_buf: Arc<CpuAccessibleBuffer<[u8]>> = unsafe {
+                CpuAccessibleBuffer::uninitialized_array(
+                    context.device.clone(),
+                    len,
+                    BufferUsage {
+                        transfer_destination: true,
+                        ..BufferUsage::none()
+                    },
+                    true,
+                )
+                .unwrap()
+            };
+
+            let mut cmd_buf = AutoCommandBufferBuilder::primary(
+                context.device.clone(),
+                context.queue.family(),
+                CommandBufferUsage::OneTimeSubmit,
+            )
+            .unwrap();
+
+            cmd_buf.copy_image_to_buffer(bitmap_img, bitmap_buf.clone()).unwrap();
+
+            cmd_buf
+                .build()
+                .unwrap()
+                .execute(context.queue.clone())
+                .unwrap()
+                .then_signal_fence_and_flush()
+                .unwrap()
+                .wait(None)
+                .unwrap();
+
+            self.data = Some(ImtBitmapData::LRGBA(Arc::new(
+                bitmap_buf
+                    .read()
+                    .unwrap()
+                    .iter()
+                    .map(|v| *v as f32 / u8::max_value() as f32)
+                    .collect(),
+            )));
+        } else {
+            self.data = Some(ImtBitmapData::Image(bitmap_img));
+        }
+
         Ok(())
     }
 

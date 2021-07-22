@@ -53,10 +53,17 @@ impl ImtSampleQuality {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImtRasterOpts {
+    /// This effects how many rays are casted
     pub fill_quality: ImtFillQuality,
+    /// This effects how many samples will be used per subpixel
     pub sample_quality: ImtSampleQuality,
+    /// Whether to align bitmaps to whole pixels. This will adjust bearings to whole
+    /// pixels and offset the resulting bitmap.
     pub align_whole_pixels: bool,
+    /// This option will be ignored and set by _cpu or _gpu constructors
     pub cpu_rasterization: bool,
+    /// Whether or to output a image instead of raw data. Only effects gpu rasterization
+    pub raster_to_image: bool,
 }
 
 impl ImtRasterOpts {
@@ -76,6 +83,7 @@ impl Default for ImtRasterOpts {
             sample_quality: ImtSampleQuality::Normal,
             align_whole_pixels: true,
             cpu_rasterization: false,
+            raster_to_image: true,
         }
     }
 }
@@ -108,6 +116,7 @@ pub(crate) struct GpuRasterContext {
     pub common_buf: Arc<DeviceLocalBuffer<glyph_cs::ty::Common>>,
     pub pipeline: Arc<dyn ComputePipelineAbstract + Send + Sync>,
     pub set_pool: Mutex<FixedSizeDescriptorSetsPool>,
+    pub raster_to_image: bool,
 }
 
 pub(crate) struct CpuRasterContext {
@@ -199,6 +208,8 @@ impl ImtRaster {
             pipeline.layout().descriptor_set_layout(0).unwrap().clone(),
         );
 
+        let raster_to_image = opts.raster_to_image;
+
         Ok(ImtRaster {
             opts,
             cache: Mutex::new(BTreeMap::new()),
@@ -209,6 +220,7 @@ impl ImtRaster {
                 common_buf: common_dev_buf,
                 pipeline,
                 set_pool: Mutex::new(set_pool),
+                raster_to_image,
             }),
             cpu_raster_context: None,
         })
