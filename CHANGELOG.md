@@ -1,5 +1,12 @@
 # Unreleased
 
+- **breaking** `ImtGlyphBitmap` `data` field is now private. Bitmap data is now represented by `ImtBitmapData` enum which can be an image, raw data in the form of a vec, or empty in the case where a bitmap is applicable.
+- **breaking** `ImtGlyphBitmap` `width`, `height`, `bearing_x`, `bearing_y` have been moved into `ImtBitmapMetrics` which can be obtained from the `ImtGlypyBitmap::metrics()` method.
+- **breaking** `ImtGlyph` `bitmap` field now is an option of `ImtBitmapData` instead of a vec of the raw data.
+- **breaking** Bitmap data color componenents are now value normalized. This is the same as `vec4(color.rgb / color.a, color.a)`. This behavior already existed in `Basalt` therefore `Basalt` users will not see any change from this other than a minor performance improvement.
+- **breaking** `ImtRaster` now has two creation methods, `new_gpu` and `new_cpu`. This will select the rasterization backend used. `ImtFont` methods `from_file` & `from_bytes` have been split into `from_file_cpu`, `from_file_gpu`, `from_bytes_cpu`, & `from_bytes_gpu` to match this change.
+- Added `ImtImageView` which is very similar to `BstImageView` from `Basalt`. This is an abstraction over `vulkano`'s `ImageView` that makes handling `ImageViews` more abstract.
+
 # Version 0.4.1 (July 20th, 2021)
 
 - `ImtRasterOpts` now has `cpu_rasterization` option to specify if cpu should be used instead of gpu for rasterization. Nvidia seems to be broken currently for gpu rasterization, so as a result this currently defaults to `true`.

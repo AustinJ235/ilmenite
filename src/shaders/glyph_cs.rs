@@ -6,25 +6,21 @@ pub mod glyph_cs {
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout(set = 0, binding = 0) readonly buffer SampleData {
-	highp vec4 offset[];
-} samples;
+layout(set = 0, binding = 0) readonly uniform Common {
+	vec4 samples_and_rays[25];
+	uint sample_count;
+	uint ray_count;
+} com;
 
-layout(set = 0, binding = 1) readonly buffer RayData {
-	highp vec4 direction[];
-} rays;
-
-layout(set = 0, binding = 2) readonly buffer LineData {
+layout(set = 0, binding = 1) readonly buffer LineData {
 	highp vec4 point[];
 } lines;
 
-layout(set = 0, binding = 3) buffer BitmapData {
+layout(set = 0, binding = 2) buffer BitmapData {
 	highp float data[];
 } bitmap;
 
-layout(set = 0, binding = 4) readonly buffer GlyphData {
-	uint samples;
-	uint rays;
+layout(set = 0, binding = 3) readonly uniform GlyphData {
 	uint lines;
 	highp float scaler;
 	uint width;
@@ -54,12 +50,12 @@ bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill
 	highp float ray_min_dist_sum = 0.0;
 	highp vec2 intersect_point = vec2(0.0);
 	
-	for(uint ray_dir_i = 0; ray_dir_i < glyph.rays; ray_dir_i++) {
+	for(uint ray_dir_i = 0; ray_dir_i < com.ray_count; ray_dir_i++) {
 		int hits = 0;
-		highp vec2 ray_dest = ray_src + (rays.direction[ray_dir_i].xy * ray_len);
-		highp float cell_height = (glyph.scaler / sqrt(glyph.samples));
+		highp vec2 ray_dest = ray_src + (com.samples_and_rays[ray_dir_i].zw * ray_len);
+		highp float cell_height = (glyph.scaler / sqrt(com.sample_count));
 		highp float cell_width = cell_height / 3.0;
-		highp float ray_angle = atan(rays.direction[ray_dir_i].y / rays.direction[ray_dir_i].x);
+		highp float ray_angle = atan(com.samples_and_rays[ray_dir_i].w / com.samples_and_rays[ray_dir_i].z);
 		highp float ray_max_dist = (cell_width / 2.0) / cos(ray_angle);
 
 		if(ray_max_dist > (cell_height / 2.0)) {
@@ -87,7 +83,7 @@ bool sample_filled(highp vec2 ray_src, highp float ray_len, out highp float fill
 		}
 	}
 	
-	fill_amt = ray_min_dist_sum / float(glyph.rays);
+	fill_amt = ray_min_dist_sum / float(com.ray_count);
 	return least_hits % 2 != 0;
 }
 
@@ -95,7 +91,7 @@ highp vec2 transform_coords(uint offset_i, vec2 offset) {
 	highp vec2 coords = vec2(float(gl_GlobalInvocationID.x), float(gl_GlobalInvocationID.y) * -1.0);
 	coords -= glyph.offset;
 	// Apply the pixel offset for sampling
-	coords += samples.offset[offset_i].xy;
+	coords += com.samples_and_rays[offset_i].xy;
 	coords += offset;
 	// Convert to font units
 	coords /= glyph.scaler;
@@ -108,13 +104,13 @@ highp float get_value(highp vec2 offset, highp float ray_len) {
 	highp float fill_amt = 0.0;
 	highp float fill_amt_sum = 0.0;
 	
-	for(uint i = 0; i < glyph.samples; i++) {
+	for(uint i = 0; i < com.sample_count; i++) {
 		if(sample_filled(transform_coords(i, offset), ray_len, fill_amt)) {
 			fill_amt_sum += fill_amt;
 		}
 	}
 	
-	return fill_amt_sum / float(glyph.samples);
+	return fill_amt_sum / float(com.sample_count);
 }
 
 void main() {
@@ -124,10 +120,20 @@ void main() {
 	);
 	
 	uint rindex = ((gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x) * 4;
-	bitmap.data[rindex] = get_value(vec2(1.0 / 6.0, 0.0), ray_len);
-	bitmap.data[rindex + 1] = get_value(vec2(3.0 / 6.0, 0.0), ray_len);
-	bitmap.data[rindex + 2] = get_value(vec2(5.0 / 6.0, 0.0), ray_len);
-	bitmap.data[rindex + 3] = (bitmap.data[rindex] + bitmap.data[rindex + 1] + bitmap.data[rindex + 2]) / 3.0;
+
+	vec3 color = vec3(
+		get_value(vec2(1.0 / 6.0, 0.0), ray_len),
+		get_value(vec2(3.0 / 6.0, 0.0), ray_len),
+		get_value(vec2(5.0 / 6.0, 0.0), ray_len)
+	);
+
+	float alpha = (color.r + color.g + color.b) / 3.0;
+	color /= alpha;
+
+	bitmap.data[rindex] = color.r;
+	bitmap.data[rindex + 1] = color.g;
+	bitmap.data[rindex + 2] = color.b;
+	bitmap.data[rindex + 3] = alpha;
 }
 	"}
 }
