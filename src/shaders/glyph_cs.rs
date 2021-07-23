@@ -43,15 +43,15 @@ bool ray_intersects(vec2 l1p1, vec2 l1p2, vec2 l2p1, vec2 l2p2, out vec2 point) 
 }
 
 bool sample_filled(vec2 ray_src, float ray_len, out float fill_amt) {
-	int least_hits = -1;
-	float ray_min_dist_sum = 0.0;
 	vec2 intersect_point = vec2(0.0);
+	int rays_filled = 0;
+	float ray_fill_amt = 0.0;
+	float cell_height = (glyph.scaler / sqrt(com.sample_count));
+	float cell_width = cell_height / 3.0;
 	
 	for(uint ray_dir_i = 0; ray_dir_i < com.ray_count; ray_dir_i++) {
 		int hits = 0;
 		vec2 ray_dest = ray_src + (com.samples_and_rays[ray_dir_i].zw * ray_len);
-		float cell_height = (glyph.scaler / sqrt(com.sample_count));
-		float cell_width = cell_height / 3.0;
 		float ray_angle = atan(com.samples_and_rays[ray_dir_i].w / com.samples_and_rays[ray_dir_i].z);
 		float ray_max_dist = (cell_width / 2.0) / cos(ray_angle);
 
@@ -72,16 +72,17 @@ bool sample_filled(vec2 ray_src, float ray_len, out float fill_amt) {
 				hits++;
 			}
 		}
-		
-		ray_min_dist_sum += ray_min_dist / ray_max_dist;
-		
-		if(least_hits == -1 || hits < least_hits) {
-			least_hits = hits;
+
+		if(hits % 2 != 0) {
+			rays_filled++;
+			ray_fill_amt += ray_min_dist / ray_max_dist;
 		}
 	}
-	
-	fill_amt = ray_min_dist_sum / float(com.ray_count);
-	return least_hits % 2 != 0;
+
+	if(rays_filled >= com.ray_count / 2) {
+		fill_amt = ray_fill_amt / float(rays_filled);
+		return true;
+	}
 }
 
 vec2 transform_coords(uint offset_i, vec2 offset) {
