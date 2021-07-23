@@ -372,6 +372,7 @@ impl ImtParserNonSend {
                 &gpos_rc,
                 self.gdef_op.as_ref(),
                 true,
+                &gsub::Features::Mask(gsub::FeatureMask::default()),
                 script.tag(),
                 Some(lang.tag()),
                 &mut infos,
@@ -432,7 +433,7 @@ impl ImtParserNonSend {
                 self.gdef_op.as_ref(),
                 script.tag(),
                 Some(lang.tag()),
-                &gsub::Features::Mask(gsub::GsubFeatureMask::default()),
+                &gsub::Features::Mask(gsub::FeatureMask::default()),
                 self.maxp.num_glyphs,
                 &mut glyphs,
             )
@@ -458,15 +459,18 @@ impl ImtParserNonSend {
                             ImtError::src_and_ty(ImtErrorSrc::Glyf, ImtErrorTy::MissingGlyph),
                         )?;
 
-                    if let Some(parsed_record) = match &glyf_record {
-                        &GlyfRecord::Present(ref record_scope) =>
-                            Some(GlyfRecord::Parsed(
-                                record_scope.read::<glyf::Glyph>().map_err(|e| {
-                                    ImtError::allsorts_parse(ImtErrorSrc::Glyf, e)
-                                })?,
-                            )),
-                        _ => None,
-                    } {
+                    if let Some(parsed_record) =
+                        match &glyf_record {
+                            &GlyfRecord::Present {
+                                ref scope,
+                                ..
+                            } =>
+                                Some(GlyfRecord::Parsed(scope.read::<glyf::Glyph>().map_err(
+                                    |e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e),
+                                )?)),
+                            _ => None,
+                        }
+                    {
                         *glyf_record = parsed_record;
                     }
 
@@ -616,7 +620,9 @@ impl ImtParserNonSend {
                             };
                         },
                         &GlyfRecord::Empty => continue,
-                        &GlyfRecord::Present(_) => panic!("Glyph should already be parsed!"),
+                        &GlyfRecord::Present {
+                            ..
+                        } => panic!("Glyph should already be parsed!"),
                     };
                 }
 

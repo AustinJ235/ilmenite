@@ -154,7 +154,15 @@ impl ImtShaper {
                         let dist_y = dist_y as f32;
                         (x + dist_x, y + dist_y)
                     },
-                    Placement::Anchor(..) | Placement::None => (x, y),
+                    Placement::MarkAnchor(_base_glyph_i, _base_glyph_anc, _mark_anc) => (x, y), /* TODO: */
+                    Placement::MarkOverprint(_base_glyph_i) => (x, y), // TODO:
+                    Placement::CursiveAnchor(
+                        _exit_glyph_i,
+                        _rl_flag,
+                        _exit_glyph_anc,
+                        _entry_glyph_anc,
+                    ) => (x, y), // TODO:
+                    Placement::None => (x, y),
                 };
 
                 let lmaxx = glyph_x + x_offset + imt_shaped_glyphs[i + shape_from].parsed.max_x;

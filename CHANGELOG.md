@@ -7,6 +7,7 @@
 - **breaking** `ImtRaster` now has two creation methods, `new_gpu` and `new_cpu`. This will select the rasterization backend used. `ImtFont` methods `from_file` & `from_bytes` have been split into `from_file_cpu`, `from_file_gpu`, `from_bytes_cpu`, & `from_bytes_gpu` to match this change.
 - Added `ImtImageView` which is very similar to `BstImageView` from `Basalt`. This is an abstraction over `vulkano`'s `ImageView` that makes handling `ImageViews` more abstract.
 - Added `raster_to_image` option to `ImtRasterOpts` which defaults to true. This option will enable/disable outputing to an image instead of raw data.
+- Update dependencies `allsorts` to `0.6.0` & `ordered-float` to `2.7.0`.
 
 # Version 0.4.1 (July 20th, 2021)
 
