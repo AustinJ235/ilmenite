@@ -137,8 +137,8 @@ impl ImtGlyphBitmap {
         let cell_width = cell_height / 3.0;
 
         let sample_filled = |ray_src: [f32; 2], ray_len: f32| -> Option<f32> {
-            let mut least_hits = -1;
-            let mut ray_min_dist_sum = 0.0;
+            let mut rays_filled = 0;
+            let mut ray_fill_amt = 0.0;
 
             for ray in context.rays.iter() {
                 let mut hits = 0_isize;
@@ -174,15 +174,14 @@ impl ImtGlyphBitmap {
                     }
                 }
 
-                ray_min_dist_sum += ray_min_dist / ray_max_dist;
-
-                if least_hits == -1 || hits < least_hits {
-                    least_hits = hits;
+                if hits % 2 != 0 {
+                    rays_filled += 1;
+                    ray_fill_amt += ray_min_dist / ray_max_dist;
                 }
             }
 
-            if least_hits != -1 && least_hits % 2 != 0 {
-                Some(ray_min_dist_sum / ray_count as f32)
+            if rays_filled >= ray_count / 2 {
+                Some(ray_fill_amt / rays_filled as f32)
             } else {
                 None
             }

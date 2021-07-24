@@ -82,6 +82,8 @@ bool sample_filled(vec2 ray_src, float ray_len, out float fill_amt) {
 	if(rays_filled >= com.ray_count / 2) {
 		fill_amt = ray_fill_amt / float(rays_filled);
 		return true;
+	} else {
+		return false;
 	}
 }
 
