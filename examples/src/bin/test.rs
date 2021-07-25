@@ -9,7 +9,7 @@ fn main() {
 			.ignore_dpi(true)
 			.window_size(800, 210)
 			.title("Ilmenite Test")
-			.gpu_accelered_text(true)
+			.imt_gpu_accelerated(true)
 			.app_loop(),
 		Box::new(move |basalt_res| {
 			let basalt = basalt_res.unwrap();
