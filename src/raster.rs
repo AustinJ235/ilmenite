@@ -36,6 +36,8 @@ impl ImtFillQuality {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtSampleQuality {
+    Fastest,
+    Faster,
     Fast,
     Normal,
     Best,
@@ -44,6 +46,8 @@ pub enum ImtSampleQuality {
 impl ImtSampleQuality {
     pub fn sample_count(&self) -> usize {
         match self {
+            Self::Fastest => 1,
+            Self::Faster => 4,
             Self::Fast => 9,
             Self::Normal => 16,
             Self::Best => 25,
