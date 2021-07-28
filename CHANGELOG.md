@@ -1,5 +1,7 @@
 # Unreleased
 
+# Version 0.5.0 (July 28th, 2021)
+
 - **breaking** `ImtGlyphBitmap` `data` field is now private. Bitmap data is now represented by `ImtBitmapData` enum which can be an image, raw data in the form of a vec, or empty in the case where a bitmap is applicable.
 - **breaking** `ImtGlyphBitmap` `width`, `height`, `bearing_x`, `bearing_y` have been moved into `ImtBitmapMetrics` which can be obtained from the `ImtGlypyBitmap::metrics()` method.
 - **breaking** `ImtGlyph` `bitmap` field now is an option of `ImtBitmapData` instead of a vec of the raw data.
