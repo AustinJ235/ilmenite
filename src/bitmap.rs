@@ -296,7 +296,7 @@ impl ImtGlyphBitmap {
         let line_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
             context.device.clone(),
             BufferUsage {
-                uniform_buffer: true, // TODO: Should be storage buffer?
+                storage_buffer: true,
                 ..BufferUsage::none()
             },
             false,

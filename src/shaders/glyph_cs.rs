@@ -1,6 +1,8 @@
 pub mod glyph_cs {
 	vulkano_shaders::shader!{
 		ty: "compute",
+		vulkan_version: "1.1",
+		spirv_version: "1.5",
 		src: "
 #version 450
 

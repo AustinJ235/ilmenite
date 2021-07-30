@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.5.1 (July 30th, 2021)
+
+- Specify vulkan & spirv version in shader. Resolves issue with current release of vulkano not detecting storage buffers correctly when spirv 1.0 is used. This also resolves issue with gpu acceleration not working on nvidia cards.
+
 # Version 0.5.0 (July 28th, 2021)
 
 - **breaking** `ImtGlyphBitmap` `data` field is now private. Bitmap data is now represented by `ImtBitmapData` enum which can be an image, raw data in the form of a vec, or empty in the case where a bitmap is applicable.
