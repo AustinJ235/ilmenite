@@ -1,5 +1,9 @@
 # Unreleased
 
+# Version 0.6.0 (August 1st, 2021)
+
+- **breaking** Previous change "Bitmap data color componenents are now value normalized." was incorrect. This made values useless for the most part. Now color values will not be normalized to anything, but will rather represent their actual values. The alpha value will now be the max color component similar to how "other" font rasterizers output.
+
 # Version 0.5.1 (July 30th, 2021)
 
 - Specify vulkan & spirv version in shader. Resolves issue with current release of vulkano not detecting storage buffers correctly when spirv 1.0 is used. This also resolves issue with gpu acceleration not working on nvidia cards.

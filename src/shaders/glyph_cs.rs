@@ -128,8 +128,7 @@ void main() {
 		get_value(vec2(5.0 / 6.0, 0.0), ray_len)
 	);
 
-	float alpha = (color.r + color.g + color.b) / 3.0;
-	color /= alpha;
+	float alpha = max(color.r, max(color.g, color.b));
 	imageStore(bitmap, ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), vec4(color, alpha));
 }
 	"}
