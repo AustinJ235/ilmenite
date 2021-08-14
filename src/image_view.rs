@@ -1,7 +1,5 @@
 use std::ops::Range;
-use std::sync::atomic::{self, AtomicBool};
 use std::sync::Arc;
-use vulkano::buffer::BufferAccess;
 use vulkano::format::Format;
 use vulkano::image::immutable::SubImage;
 use vulkano::image::view::{
@@ -59,26 +57,6 @@ unsafe impl ImageAccess for ImageVarient {
             Self::Immutable(i) => i.descriptor_layouts(),
             Self::Sub(i) => i.descriptor_layouts(),
             Self::Attachment(i) => i.descriptor_layouts(),
-        }
-    }
-
-    #[inline]
-    fn conflicts_buffer(&self, other: &dyn BufferAccess) -> bool {
-        match self {
-            Self::Storage(i) => i.conflicts_buffer(other),
-            Self::Immutable(i) => i.conflicts_buffer(other),
-            Self::Sub(i) => i.conflicts_buffer(other),
-            Self::Attachment(i) => i.conflicts_buffer(other),
-        }
-    }
-
-    #[inline]
-    fn conflicts_image(&self, other: &dyn ImageAccess) -> bool {
-        match self {
-            Self::Storage(i) => i.conflicts_image(other),
-            Self::Immutable(i) => i.conflicts_image(other),
-            Self::Sub(i) => i.conflicts_image(other),
-            Self::Attachment(i) => i.conflicts_image(other),
         }
     }
 
@@ -152,19 +130,14 @@ unsafe impl ImageAccess for ImageVarient {
     }
 }
 
-enum ViewVarient {
-    Parent(Arc<ImageView<ImageVarient>>),
-    Child(Arc<ImtImageView>, Arc<AtomicBool>),
-}
-
 pub struct ImtImageView {
-    view: ViewVarient,
+    view: Arc<ImageView<ImageVarient>>,
 }
 
 impl ImtImageView {
     pub fn from_storage(image: Arc<StorageImage>) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ViewVarient::Parent(ImageView::new(ImageVarient::Storage(image))?),
+            view: ImageView::new(ImageVarient::Storage(image))?,
         }))
     }
 
@@ -172,13 +145,13 @@ impl ImtImageView {
         image: Arc<ImmutableImage>,
     ) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ViewVarient::Parent(ImageView::new(ImageVarient::Immutable(image))?),
+            view: ImageView::new(ImageVarient::Immutable(image))?,
         }))
     }
 
     pub fn from_sub(image: Arc<SubImage>) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ViewVarient::Parent(ImageView::new(ImageVarient::Sub(image))?),
+            view: ImageView::new(ImageVarient::Sub(image))?,
         }))
     }
 
@@ -186,136 +159,87 @@ impl ImtImageView {
         image: Arc<AttachmentImage>,
     ) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ViewVarient::Parent(ImageView::new(ImageVarient::Attachment(image))?),
+            view: ImageView::new(ImageVarient::Attachment(image))?,
         }))
-    }
-
-    /// Create a clone of this view that is intented to be temporary. This method will return
-    /// a clone of this view along with an `AtomicBool`. The `AtomicBool` will be set to false
-    /// when the cloned copy is dropped.
-    pub fn create_tmp(self: &Arc<Self>) -> (Arc<Self>, Arc<AtomicBool>) {
-        let alive_ret = Arc::new(AtomicBool::new(true));
-
-        (
-            Arc::new(Self {
-                view: ViewVarient::Child(self.clone(), alive_ret.clone()),
-            }),
-            alive_ret,
-        )
-    }
-
-    /// Check whether this view is temporary. In the case it is the method that provided this
-    /// view intended for it be dropped after use.
-    pub fn is_temporary(&self) -> bool {
-        match &self.view {
-            ViewVarient::Child(..) => true,
-            _ => false,
-        }
-    }
-
-    #[inline]
-    fn image_view(&self) -> Arc<ImageView<ImageVarient>> {
-        match &self.view {
-            ViewVarient::Parent(i) => i.clone(),
-            ViewVarient::Child(p, _) => p.image_view(),
-        }
-    }
-
-    #[inline]
-    fn image_view_ref(&self) -> &Arc<ImageView<ImageVarient>> {
-        match &self.view {
-            ViewVarient::Parent(ref i) => i,
-            ViewVarient::Child(p, _) => p.image_view_ref(),
-        }
     }
 
     #[inline]
     pub fn dimensions(&self) -> ImageDimensions {
-        self.image_view().image().dimensions()
+        self.view.image().dimensions()
     }
 }
 
 unsafe impl ImageViewAbstract for ImtImageView {
     #[inline]
     fn image(&self) -> &dyn ImageAccess {
-        self.image_view_ref().image()
+        self.view.image()
     }
 
     #[inline]
     fn inner(&self) -> &UnsafeImageView {
-        self.image_view_ref().inner()
+        self.view.inner()
     }
 
     #[inline]
     fn array_layers(&self) -> Range<u32> {
-        self.image_view_ref().array_layers()
+        self.view.array_layers()
     }
 
     #[inline]
     fn format(&self) -> Format {
-        self.image_view_ref().format()
+        self.view.format()
     }
 
     #[inline]
     fn component_mapping(&self) -> ComponentMapping {
-        self.image_view_ref().component_mapping()
+        self.view.component_mapping()
     }
 
     #[inline]
     fn ty(&self) -> ImageViewType {
-        self.image_view_ref().ty()
+        self.view.ty()
     }
 
     #[inline]
     fn can_be_sampled(&self, _sampler: &Sampler) -> bool {
-        self.image_view_ref().can_be_sampled(_sampler)
+        self.view.can_be_sampled(_sampler)
     }
 }
 
 unsafe impl ImageAccess for ImtImageView {
     #[inline]
     fn inner(&self) -> ImageInner<'_> {
-        self.image_view_ref().image().inner()
+        self.view.image().inner()
     }
 
     #[inline]
     fn initial_layout_requirement(&self) -> ImageLayout {
-        self.image_view_ref().image().initial_layout_requirement()
+        self.view.image().initial_layout_requirement()
     }
 
     #[inline]
     fn final_layout_requirement(&self) -> ImageLayout {
-        self.image_view_ref().image().final_layout_requirement()
+        self.view.image().final_layout_requirement()
     }
 
     #[inline]
     fn descriptor_layouts(&self) -> Option<ImageDescriptorLayouts> {
-        self.image_view_ref().image().descriptor_layouts()
-    }
-
-    #[inline]
-    fn conflicts_buffer(&self, other: &dyn BufferAccess) -> bool {
-        self.image_view_ref().image().conflicts_buffer(other)
-    }
-
-    #[inline]
-    fn conflicts_image(&self, other: &dyn ImageAccess) -> bool {
-        self.image_view_ref().image().conflicts_image(other)
+        self.view.image().descriptor_layouts()
     }
 
     #[inline]
     fn conflict_key(&self) -> u64 {
-        self.image_view_ref().image().conflict_key()
+        self.view.image().conflict_key()
     }
 
     #[inline]
     fn current_miplevels_access(&self) -> Range<u32> {
-        self.image_view_ref().image().current_miplevels_access()
+        self.view.image().current_miplevels_access()
     }
 
     #[inline]
     fn current_layer_levels_access(&self) -> Range<u32> {
-        self.image_view_ref().image().current_layer_levels_access()
+        self.view.image().current_layer_levels_access()
     }
 
     #[inline]
@@ -325,31 +249,16 @@ unsafe impl ImageAccess for ImtImageView {
         uninitialized_safe: bool,
         expected_layout: ImageLayout,
     ) -> Result<(), AccessError> {
-        self.image_view_ref().image().try_gpu_lock(
-            exclusive_access,
-            uninitialized_safe,
-            expected_layout,
-        )
+        self.view.image().try_gpu_lock(exclusive_access, uninitialized_safe, expected_layout)
     }
 
     #[inline]
     unsafe fn increase_gpu_lock(&self) {
-        self.image_view_ref().image().increase_gpu_lock()
+        self.view.image().increase_gpu_lock()
     }
 
     #[inline]
     unsafe fn unlock(&self, transitioned_layout: Option<ImageLayout>) {
-        self.image_view_ref().image().unlock(transitioned_layout)
-    }
-}
-
-impl Drop for ImtImageView {
-    fn drop(&mut self) {
-        match &self.view {
-            ViewVarient::Parent(_) => (),
-            ViewVarient::Child(_, alive) => {
-                alive.store(false, atomic::Ordering::SeqCst);
-            },
-        }
+        self.view.image().unlock(transitioned_layout)
     }
 }

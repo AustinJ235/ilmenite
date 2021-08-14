@@ -12,7 +12,7 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
-use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
+use vulkano::descriptor_set::fixed_size_pool::FixedSizeDescriptorSetsPool;
 use vulkano::device::{Device, Queue};
 use vulkano::pipeline::{ComputePipeline, ComputePipelineAbstract};
 use vulkano::sync::GpuFuture;
@@ -209,7 +209,7 @@ impl ImtRaster {
         );
 
         let set_pool = FixedSizeDescriptorSetsPool::new(
-            pipeline.layout().descriptor_set_layout(0).unwrap().clone(),
+            pipeline.layout().descriptor_set_layouts()[0].clone(),
         );
 
         let raster_to_image = opts.raster_to_image;

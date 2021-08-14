@@ -332,7 +332,6 @@ impl ImtGlyphBitmap {
                 context.pipeline.clone(),
                 descriptor_set,
                 (),
-                iter::empty(),
             )
             .unwrap();
 
@@ -347,7 +346,7 @@ impl ImtGlyphBitmap {
             .unwrap();
 
         if !context.raster_to_image {
-            let len = (self.metrics.width * self.metrics.height * 4) as usize;
+            let len = (self.metrics.width * self.metrics.height * 4) as u64;
             let bitmap_buf: Arc<CpuAccessibleBuffer<[u8]>> = unsafe {
                 CpuAccessibleBuffer::uninitialized_array(
                     context.device.clone(),
