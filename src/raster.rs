@@ -12,9 +12,9 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
-use vulkano::descriptor_set::fixed_size_pool::FixedSizeDescriptorSetsPool;
+use vulkano::descriptor_set::SingleLayoutDescSetPool;
 use vulkano::device::{Device, Queue};
-use vulkano::pipeline::{ComputePipeline, ComputePipelineAbstract};
+use vulkano::pipeline::ComputePipeline;
 use vulkano::sync::GpuFuture;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -118,8 +118,8 @@ pub(crate) struct GpuRasterContext {
     pub queue: Arc<Queue>,
     pub glyph_cs: glyph_cs::Shader,
     pub common_buf: Arc<DeviceLocalBuffer<glyph_cs::ty::Common>>,
-    pub pipeline: Arc<dyn ComputePipelineAbstract + Send + Sync>,
-    pub set_pool: Mutex<FixedSizeDescriptorSetsPool>,
+    pub pipeline: Arc<ComputePipeline>,
+    pub set_pool: Mutex<SingleLayoutDescSetPool>,
     pub raster_to_image: bool,
 }
 
@@ -205,12 +205,13 @@ impl ImtRaster {
 
         let pipeline = Arc::new(
             ComputePipeline::new(device.clone(), &glyph_cs.main_entry_point(), &(), None)
-                .unwrap(),
+                .unwrap()
         );
 
-        let set_pool = FixedSizeDescriptorSetsPool::new(
+        let set_pool = SingleLayoutDescSetPool::new(
             pipeline.layout().descriptor_set_layouts()[0].clone(),
-        );
+            0
+        ).unwrap();
 
         let raster_to_image = opts.raster_to_image;
 

@@ -304,10 +304,12 @@ impl ImtGlyphBitmap {
         )
         .unwrap();
 
-        let descriptor_set = context
-            .set_pool
-            .lock()
+        let mut desc_set_pool = context.set_pool.lock();
+        let mut desc_set_builder = desc_set_pool
             .next()
+            .unwrap();
+        
+        desc_set_builder
             .add_buffer(context.common_buf.clone())
             .unwrap()
             .add_buffer(glyph_buf)
@@ -315,9 +317,13 @@ impl ImtGlyphBitmap {
             .add_image(bitmap_img.clone())
             .unwrap()
             .add_buffer(line_buf)
-            .unwrap()
+            .unwrap();
+        
+        let descriptor_set = desc_set_builder
             .build()
             .unwrap();
+
+        drop(desc_set_pool);
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
             context.device.clone(),
