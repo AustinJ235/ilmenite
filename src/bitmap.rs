@@ -13,6 +13,7 @@ use vulkano::command_buffer::{
 use vulkano::format::Format;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
 use vulkano::sync::GpuFuture;
+use vulkano::pipeline::PipelineBindPoint;
 
 #[derive(Clone)]
 pub enum ImtBitmapData {
@@ -333,12 +334,14 @@ impl ImtGlyphBitmap {
         .unwrap();
 
         cmd_buf
-            .dispatch(
-                [self.metrics.width, self.metrics.height, 1],
-                context.pipeline.clone(),
-                descriptor_set,
-                (),
+            .bind_pipeline_compute(context.pipeline.clone())
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                context.pipeline.layout().clone(),
+                0,
+                descriptor_set
             )
+            .dispatch([self.metrics.width, self.metrics.height, 1])
             .unwrap();
 
         cmd_buf
