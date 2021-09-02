@@ -12,8 +12,8 @@ use vulkano::command_buffer::{
 };
 use vulkano::format::Format;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
-use vulkano::sync::GpuFuture;
 use vulkano::pipeline::PipelineBindPoint;
+use vulkano::sync::GpuFuture;
 
 #[derive(Clone)]
 pub enum ImtBitmapData {
@@ -281,7 +281,7 @@ impl ImtGlyphBitmap {
                     height: self.metrics.height,
                     array_layers: 1,
                 },
-                Format::R8G8B8A8Unorm,
+                Format::R8G8B8A8_UNORM,
                 ImageUsage {
                     transfer_source: true,
                     storage: true,
@@ -307,7 +307,7 @@ impl ImtGlyphBitmap {
 
         let mut desc_set_pool = context.set_pool.lock();
         let mut desc_set_builder = desc_set_pool.next();
-        
+
         desc_set_builder
             .add_buffer(context.common_buf.clone())
             .unwrap()
@@ -317,10 +317,8 @@ impl ImtGlyphBitmap {
             .unwrap()
             .add_buffer(line_buf)
             .unwrap();
-        
-        let descriptor_set = desc_set_builder
-            .build()
-            .unwrap();
+
+        let descriptor_set = desc_set_builder.build().unwrap();
 
         drop(desc_set_pool);
 
@@ -337,7 +335,7 @@ impl ImtGlyphBitmap {
                 PipelineBindPoint::Compute,
                 context.pipeline.layout().clone(),
                 0,
-                descriptor_set
+                descriptor_set,
             )
             .dispatch([self.metrics.width, self.metrics.height, 1])
             .unwrap();

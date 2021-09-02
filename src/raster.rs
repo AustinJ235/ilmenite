@@ -205,10 +205,11 @@ impl ImtRaster {
 
         let pipeline = Arc::new(
             ComputePipeline::new(device.clone(), &glyph_cs.main_entry_point(), &(), None)
-                .unwrap()
+                .unwrap(),
         );
 
-        let set_pool = SingleLayoutDescSetPool::new(pipeline.layout().descriptor_set_layouts()[0].clone());
+        let set_pool =
+            SingleLayoutDescSetPool::new(pipeline.layout().descriptor_set_layouts()[0].clone());
 
         let raster_to_image = opts.raster_to_image;
 
