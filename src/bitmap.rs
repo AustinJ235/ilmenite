@@ -306,9 +306,7 @@ impl ImtGlyphBitmap {
         .unwrap();
 
         let mut desc_set_pool = context.set_pool.lock();
-        let mut desc_set_builder = desc_set_pool
-            .next()
-            .unwrap();
+        let mut desc_set_builder = desc_set_pool.next();
         
         desc_set_builder
             .add_buffer(context.common_buf.clone())
