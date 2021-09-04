@@ -10,7 +10,6 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
-use vulkano::format::Format;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
 use vulkano::pipeline::PipelineBindPoint;
 use vulkano::sync::GpuFuture;
@@ -281,7 +280,7 @@ impl ImtGlyphBitmap {
                     height: self.metrics.height,
                     array_layers: 1,
                 },
-                Format::R8G8B8A8_UNORM,
+                context.raster_image_format,
                 ImageUsage {
                     transfer_source: true,
                     storage: true,

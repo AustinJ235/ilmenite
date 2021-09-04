@@ -53,6 +53,14 @@ pub use shape::{
     ImtVertAlign,
 };
 use std::collections::HashMap;
+use vulkano::device::Features as VkFeatures;
+
+pub fn ilmenite_required_vk_features() -> VkFeatures {
+    VkFeatures {
+        shader_storage_image_write_without_format: true,
+        .. VkFeatures::none()
+    }
+}
 
 pub struct ImtGlyph {
     pub x: f32,
