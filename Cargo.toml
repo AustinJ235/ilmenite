@@ -1,6 +1,6 @@
 [package]
 name = "ilmenite"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Austin Johnson <me@austinj.me>"]
 repository = "https://github.com/AustinJ235/ilmenite"
 documentation = "https://docs.rs/ilmenite"
@@ -14,9 +14,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vulkano = { git = "https://github.com/AustinJ235/vulkano.git", branch = "basalt" }
-vulkano-shaders = { git = "https://github.com/AustinJ235/vulkano.git", branch = "basalt" }
+vulkano = "0.26"
+vulkano-shaders = "0.26"
 allsorts = "0.6.0"
-ordered-float = "2.7.0"
-parking_lot = "0.11.1"
+ordered-float = "2.8.0"
+parking_lot = "0.11.2"
 crossbeam = "0.8.1"
