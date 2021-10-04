@@ -10,8 +10,8 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
-use vulkano::format::Format;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
+use vulkano::pipeline::PipelineBindPoint;
 use vulkano::sync::GpuFuture;
 
 #[derive(Clone)]
@@ -280,7 +280,7 @@ impl ImtGlyphBitmap {
                     height: self.metrics.height,
                     array_layers: 1,
                 },
-                Format::R8G8B8A8Unorm,
+                context.raster_image_format,
                 ImageUsage {
                     transfer_source: true,
                     storage: true,
@@ -304,10 +304,10 @@ impl ImtGlyphBitmap {
         )
         .unwrap();
 
-        let descriptor_set = context
-            .set_pool
-            .lock()
-            .next()
+        let mut desc_set_pool = context.set_pool.lock();
+        let mut desc_set_builder = desc_set_pool.next();
+
+        desc_set_builder
             .add_buffer(context.common_buf.clone())
             .unwrap()
             .add_buffer(glyph_buf)
@@ -315,9 +315,11 @@ impl ImtGlyphBitmap {
             .add_image(bitmap_img.clone())
             .unwrap()
             .add_buffer(line_buf)
-            .unwrap()
-            .build()
             .unwrap();
+
+        let descriptor_set = desc_set_builder.build().unwrap();
+
+        drop(desc_set_pool);
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
             context.device.clone(),
@@ -327,12 +329,14 @@ impl ImtGlyphBitmap {
         .unwrap();
 
         cmd_buf
-            .dispatch(
-                [self.metrics.width, self.metrics.height, 1],
-                context.pipeline.clone(),
+            .bind_pipeline_compute(context.pipeline.clone())
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                context.pipeline.layout().clone(),
+                0,
                 descriptor_set,
-                (),
             )
+            .dispatch([self.metrics.width, self.metrics.height, 1])
             .unwrap();
 
         cmd_buf

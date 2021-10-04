@@ -23,7 +23,7 @@ layout(set = 0, binding = 1) readonly uniform Glyph {
 	vec2 offset;
 } glyph;
 
-layout(set = 0, binding = 2, rgba8) writeonly uniform image2D bitmap;
+layout(set = 0, binding = 2) writeonly uniform image2D bitmap;
 
 layout(set = 0, binding = 3) readonly buffer Line {
 	vec4 line[];

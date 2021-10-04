@@ -12,10 +12,11 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
-use vulkano::descriptor_set::fixed_size_pool::FixedSizeDescriptorSetsPool;
+use vulkano::descriptor_set::SingleLayoutDescSetPool;
 use vulkano::device::{Device, Queue};
-use vulkano::pipeline::{ComputePipeline, ComputePipelineAbstract};
+use vulkano::pipeline::ComputePipeline;
 use vulkano::sync::GpuFuture;
+use vulkano::format::Format;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtFillQuality {
@@ -68,6 +69,8 @@ pub struct ImtRasterOpts {
     pub cpu_rasterization: bool,
     /// Whether or to output a image instead of raw data. Only effects gpu rasterization
     pub raster_to_image: bool,
+    /// Format used for the bitmap image.
+    pub raster_image_format: Format,
 }
 
 impl ImtRasterOpts {
@@ -88,6 +91,7 @@ impl Default for ImtRasterOpts {
             align_whole_pixels: true,
             cpu_rasterization: false,
             raster_to_image: true,
+            raster_image_format: Format::R8G8B8A8_UNORM,
         }
     }
 }
@@ -118,9 +122,10 @@ pub(crate) struct GpuRasterContext {
     pub queue: Arc<Queue>,
     pub glyph_cs: glyph_cs::Shader,
     pub common_buf: Arc<DeviceLocalBuffer<glyph_cs::ty::Common>>,
-    pub pipeline: Arc<dyn ComputePipelineAbstract + Send + Sync>,
-    pub set_pool: Mutex<FixedSizeDescriptorSetsPool>,
+    pub pipeline: Arc<ComputePipeline>,
+    pub set_pool: Mutex<SingleLayoutDescSetPool>,
     pub raster_to_image: bool,
+    pub raster_image_format: Format,
 }
 
 pub(crate) struct CpuRasterContext {
@@ -204,15 +209,15 @@ impl ImtRaster {
             .unwrap();
 
         let pipeline = Arc::new(
-            ComputePipeline::new(device.clone(), &glyph_cs.main_entry_point(), &(), None)
+            ComputePipeline::new(device.clone(), &glyph_cs.main_entry_point(), &(), None, |_| {})
                 .unwrap(),
         );
 
-        let set_pool = FixedSizeDescriptorSetsPool::new(
-            pipeline.layout().descriptor_set_layouts()[0].clone(),
-        );
+        let set_pool =
+            SingleLayoutDescSetPool::new(pipeline.layout().descriptor_set_layouts()[0].clone());
 
         let raster_to_image = opts.raster_to_image;
+        let raster_image_format = opts.raster_image_format;
 
         Ok(ImtRaster {
             opts,
@@ -225,6 +230,7 @@ impl ImtRaster {
                 pipeline,
                 set_pool: Mutex::new(set_pool),
                 raster_to_image,
+                raster_image_format,
             }),
             cpu_raster_context: None,
         })

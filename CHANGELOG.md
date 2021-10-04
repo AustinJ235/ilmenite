@@ -1,5 +1,11 @@
 # Unreleased
 
+**breaking** Update dependency `vulkano` & `vulkano-shaders` to `0.26.0`. 
+**breaking** `ImtRasterOpts` now has `raster_image_format` field to use a custom format for images.
+    - This requires `shader_storage_image_write_without_format` feature.
+        - Most desktop/laptop gpu's support this feature.
+    - Added method to root of crate, `ilmenite_required_vk_features()`.
+
 # Version 0.6.0 (August 1st, 2021)
 
 - **breaking** Previous change "Bitmap data color componenents are now value normalized." was incorrect. This made values useless for the most part. Now color values will not be normalized to anything, but will rather represent their actual values. The alpha value will now be the max color component similar to how "other" font rasterizers output.
