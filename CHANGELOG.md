@@ -1,6 +1,6 @@
 # Unreleased
 
-**breaking** Update dependency `vulkano` & `vulkano-shaders` to `0.26.0`. 
+**breaking** Update dependency `vulkano` & `vulkano-shaders` to `0.26.0`.
 **breaking** `ImtRasterOpts` now has `raster_image_format` field to use a custom format for images.
     - This requires `shader_storage_image_write_without_format` feature.
         - Most desktop/laptop gpu's support this feature.
