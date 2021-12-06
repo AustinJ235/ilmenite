@@ -58,7 +58,7 @@ use vulkano::device::Features as VkFeatures;
 pub fn ilmenite_required_vk_features() -> VkFeatures {
     VkFeatures {
         shader_storage_image_write_without_format: true,
-        .. VkFeatures::none()
+        ..VkFeatures::none()
     }
 }
 

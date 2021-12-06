@@ -1,5 +1,7 @@
 # Unreleased
 
+**BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.27.0`.
+
 # Version 0.7.0 (Octoboer 3rd, 2021)
 
 **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.26.0`.
