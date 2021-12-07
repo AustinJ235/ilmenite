@@ -14,9 +14,10 @@ use vulkano::command_buffer::{
 };
 use vulkano::descriptor_set::SingleLayoutDescSetPool;
 use vulkano::device::{Device, Queue};
-use vulkano::pipeline::ComputePipeline;
-use vulkano::sync::GpuFuture;
 use vulkano::format::Format;
+use vulkano::pipeline::{ComputePipeline, Pipeline};
+use vulkano::shader::ShaderModule;
+use vulkano::sync::GpuFuture;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtFillQuality {
@@ -120,7 +121,7 @@ pub struct ImtRaster {
 pub(crate) struct GpuRasterContext {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
-    pub glyph_cs: glyph_cs::Shader,
+    pub glyph_cs: Arc<ShaderModule>,
     pub common_buf: Arc<DeviceLocalBuffer<glyph_cs::ty::Common>>,
     pub pipeline: Arc<ComputePipeline>,
     pub set_pool: Mutex<SingleLayoutDescSetPool>,
@@ -140,7 +141,7 @@ impl ImtRaster {
         mut opts: ImtRasterOpts,
     ) -> Result<Self, ImtError> {
         opts.cpu_rasterization = false;
-        let glyph_cs = glyph_cs::Shader::load(device.clone()).unwrap();
+        let glyph_cs = glyph_cs::load(device.clone()).unwrap();
         let mut samples_and_rays = [[0.0; 4]; 25];
         let sample_count = opts.sample_count();
 
@@ -208,14 +209,16 @@ impl ImtRaster {
             .wait(None)
             .unwrap();
 
-        let pipeline = Arc::new(
-            ComputePipeline::new(device.clone(), &glyph_cs.main_entry_point(), &(), None, |_| {})
-                .unwrap(),
-        );
-
+        let pipeline = ComputePipeline::new(
+            device.clone(),
+            glyph_cs.entry_point("main").unwrap(),
+            &(),
+            None,
+            |_| {},
+        )
+        .unwrap();
         let set_pool =
             SingleLayoutDescSetPool::new(pipeline.layout().descriptor_set_layouts()[0].clone());
-
         let raster_to_image = opts.raster_to_image;
         let raster_image_format = opts.raster_image_format;
 

@@ -137,7 +137,7 @@ pub struct ImtImageView {
 impl ImtImageView {
     pub fn from_storage(image: Arc<StorageImage>) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(ImageVarient::Storage(image))?,
+            view: ImageView::new(Arc::new(ImageVarient::Storage(image)))?,
         }))
     }
 
@@ -145,13 +145,13 @@ impl ImtImageView {
         image: Arc<ImmutableImage>,
     ) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(ImageVarient::Immutable(image))?,
+            view: ImageView::new(Arc::new(ImageVarient::Immutable(image)))?,
         }))
     }
 
     pub fn from_sub(image: Arc<SubImage>) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(ImageVarient::Sub(image))?,
+            view: ImageView::new(Arc::new(ImageVarient::Sub(image)))?,
         }))
     }
 
@@ -159,7 +159,7 @@ impl ImtImageView {
         image: Arc<AttachmentImage>,
     ) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(ImageVarient::Attachment(image))?,
+            view: ImageView::new(Arc::new(ImageVarient::Attachment(image)))?,
         }))
     }
 
@@ -171,8 +171,8 @@ impl ImtImageView {
 
 unsafe impl ImageViewAbstract for ImtImageView {
     #[inline]
-    fn image(&self) -> &dyn ImageAccess {
-        self.view.image()
+    fn image(&self) -> Arc<dyn ImageAccess> {
+        self.view.image().clone() as Arc<dyn ImageAccess>
     }
 
     #[inline]

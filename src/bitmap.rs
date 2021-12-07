@@ -11,7 +11,7 @@ use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
-use vulkano::pipeline::PipelineBindPoint;
+use vulkano::pipeline::{Pipeline, PipelineBindPoint};
 use vulkano::sync::GpuFuture;
 
 #[derive(Clone)]
