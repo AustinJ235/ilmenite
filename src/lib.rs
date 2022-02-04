@@ -24,6 +24,7 @@ extern crate ordered_float;
 extern crate parking_lot;
 extern crate vulkano;
 extern crate vulkano_shaders;
+extern crate ash;
 
 pub mod bitmap;
 pub mod error;

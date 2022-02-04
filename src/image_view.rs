@@ -1,16 +1,18 @@
 use std::ops::Range;
 use std::sync::Arc;
+use vulkano::device::physical::FormatFeatures;
+use vulkano::device::{Device, DeviceOwned};
 use vulkano::format::Format;
 use vulkano::image::immutable::SubImage;
-use vulkano::image::view::{
-    ComponentMapping, ImageView, ImageViewCreationError, ImageViewType, UnsafeImageView,
-};
+use vulkano::image::view::{ImageView, ImageViewCreationError, ImageViewType};
 use vulkano::image::{
-    AttachmentImage, ImageAccess, ImageDescriptorLayouts, ImageDimensions, ImageInner,
-    ImageLayout, ImageViewAbstract, ImmutableImage, StorageImage,
+    AttachmentImage, ImageAccess, ImageAspects, ImageDescriptorLayouts, ImageDimensions,
+    ImageInner, ImageLayout, ImageUsage, ImageViewAbstract, ImmutableImage, StorageImage,
 };
-use vulkano::sampler::Sampler;
+use vulkano::sampler::ycbcr::SamplerYcbcrConversion;
+use vulkano::sampler::ComponentMapping;
 use vulkano::sync::AccessError;
+use vulkano::VulkanObject;
 
 enum ImageVarient {
     Storage(Arc<StorageImage>),
@@ -71,22 +73,22 @@ unsafe impl ImageAccess for ImageVarient {
     }
 
     #[inline]
-    fn current_miplevels_access(&self) -> Range<u32> {
+    fn current_mip_levels_access(&self) -> Range<u32> {
         match self {
-            Self::Storage(i) => i.current_miplevels_access(),
-            Self::Immutable(i) => i.current_miplevels_access(),
-            Self::Sub(i) => i.current_miplevels_access(),
-            Self::Attachment(i) => i.current_miplevels_access(),
+            Self::Storage(i) => i.current_mip_levels_access(),
+            Self::Immutable(i) => i.current_mip_levels_access(),
+            Self::Sub(i) => i.current_mip_levels_access(),
+            Self::Attachment(i) => i.current_mip_levels_access(),
         }
     }
 
     #[inline]
-    fn current_layer_levels_access(&self) -> Range<u32> {
+    fn current_array_layers_access(&self) -> Range<u32> {
         match self {
-            Self::Storage(i) => i.current_layer_levels_access(),
-            Self::Immutable(i) => i.current_layer_levels_access(),
-            Self::Sub(i) => i.current_layer_levels_access(),
-            Self::Attachment(i) => i.current_layer_levels_access(),
+            Self::Storage(i) => i.current_array_layers_access(),
+            Self::Immutable(i) => i.current_array_layers_access(),
+            Self::Sub(i) => i.current_array_layers_access(),
+            Self::Attachment(i) => i.current_array_layers_access(),
         }
     }
 
@@ -176,18 +178,13 @@ unsafe impl ImageViewAbstract for ImtImageView {
     }
 
     #[inline]
-    fn inner(&self) -> &UnsafeImageView {
-        self.view.inner()
-    }
-
-    #[inline]
     fn array_layers(&self) -> Range<u32> {
         self.view.array_layers()
     }
 
     #[inline]
-    fn format(&self) -> Format {
-        self.view.format()
+    fn aspects(&self) -> &ImageAspects {
+        self.view.aspects()
     }
 
     #[inline]
@@ -196,13 +193,58 @@ unsafe impl ImageViewAbstract for ImtImageView {
     }
 
     #[inline]
+    fn filter_cubic(&self) -> bool {
+        self.view.filter_cubic()
+    }
+
+    #[inline]
+    fn filter_cubic_minmax(&self) -> bool {
+        self.view.filter_cubic_minmax()
+    }
+
+    #[inline]
+    fn format(&self) -> Format {
+        self.view.format()
+    }
+
+    #[inline]
+    fn format_features(&self) -> &FormatFeatures {
+        self.view.format_features()
+    }
+
+    #[inline]
+    fn mip_levels(&self) -> Range<u32> {
+        self.view.mip_levels()
+    }
+
+    #[inline]
+    fn sampler_ycbcr_conversion(&self) -> Option<&Arc<SamplerYcbcrConversion>> {
+        self.view.sampler_ycbcr_conversion()
+    }
+
+    #[inline]
     fn ty(&self) -> ImageViewType {
         self.view.ty()
     }
 
     #[inline]
-    fn can_be_sampled(&self, _sampler: &Sampler) -> bool {
-        self.view.can_be_sampled(_sampler)
+    fn usage(&self) -> &ImageUsage {
+        self.view.usage()
+    }
+}
+
+unsafe impl VulkanObject for ImtImageView {
+    type Object = ash::vk::ImageView;
+
+    #[inline]
+    fn internal_object(&self) -> ash::vk::ImageView {
+        self.view.internal_object()
+    }
+}
+
+unsafe impl DeviceOwned for ImtImageView {
+    fn device(&self) -> &Arc<Device> {
+        self.view.device()
     }
 }
 
@@ -233,13 +275,13 @@ unsafe impl ImageAccess for ImtImageView {
     }
 
     #[inline]
-    fn current_miplevels_access(&self) -> Range<u32> {
-        self.view.image().current_miplevels_access()
+    fn current_mip_levels_access(&self) -> Range<u32> {
+        self.view.image().current_mip_levels_access()
     }
 
     #[inline]
-    fn current_layer_levels_access(&self) -> Range<u32> {
-        self.view.image().current_layer_levels_access()
+    fn current_array_layers_access(&self) -> Range<u32> {
+        self.view.image().current_array_layers_access()
     }
 
     #[inline]

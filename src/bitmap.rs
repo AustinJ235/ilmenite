@@ -10,6 +10,7 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
 };
+use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
 use vulkano::pipeline::{Pipeline, PipelineBindPoint};
 use vulkano::sync::GpuFuture;
@@ -304,22 +305,19 @@ impl ImtGlyphBitmap {
         )
         .unwrap();
 
-        let mut desc_set_pool = context.set_pool.lock();
-        let mut desc_set_builder = desc_set_pool.next();
-
-        desc_set_builder
-            .add_buffer(context.common_buf.clone())
-            .unwrap()
-            .add_buffer(glyph_buf)
-            .unwrap()
-            .add_image(bitmap_img.clone())
-            .unwrap()
-            .add_buffer(line_buf)
+        let descriptor_set = context
+            .set_pool
+            .lock()
+            .next(
+                vec![
+                    WriteDescriptorSet::buffer(0, context.common_buf.clone()),
+                    WriteDescriptorSet::buffer(1, glyph_buf),
+                    WriteDescriptorSet::image_view(2, bitmap_img.clone()),
+                    WriteDescriptorSet::buffer(3, line_buf),
+                ]
+                .into_iter(),
+            )
             .unwrap();
-
-        let descriptor_set = desc_set_builder.build().unwrap();
-
-        drop(desc_set_pool);
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
             context.device.clone(),
