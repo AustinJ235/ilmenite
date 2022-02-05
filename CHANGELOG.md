@@ -1,15 +1,17 @@
 # Unreleased
 
-**BREAKING* Update dependency `vulkano` & `vulkano-shaders` to `0.28`.
+# Version 0.14.0 (January 5th, 2022)
+
+- **BREAKING* Update dependency `vulkano` & `vulkano-shaders` to `0.28`.
 
 # Version 0.8.0 (December 7th, 2021)
 
-**BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.27.1`.
+- **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.27.1`.
 
 # Version 0.7.0 (Octoboer 3rd, 2021)
 
-**BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.26.0`.
-**BREAKING** `ImtRasterOpts` now has `raster_image_format` field to use a custom format for images.
+- **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.26.0`.
+- **BREAKING** `ImtRasterOpts` now has `raster_image_format` field to use a custom format for images.
     - This requires `shader_storage_image_write_without_format` feature.
         - Most desktop/laptop gpu's support this feature.
     - Added method to root of crate, `ilmenite_required_vk_features()`.
