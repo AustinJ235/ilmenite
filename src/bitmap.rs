@@ -113,6 +113,11 @@ impl ImtGlyphBitmap {
     }
 
     pub(crate) fn raster_cpu(&mut self, context: &CpuRasterContext) -> Result<(), ImtError> {
+        if self.metrics.width == 0 || self.metrics.height == 0 || self.lines.is_empty() {
+            self.data = Some(ImtBitmapData::Empty);
+            return Ok(());
+        }
+        
         let ray_count = context.rays.len();
         let sample_count = context.samples.len();
 
@@ -244,7 +249,7 @@ impl ImtGlyphBitmap {
     }
 
     pub(crate) fn raster_gpu(&mut self, context: &GpuRasterContext) -> Result<(), ImtError> {
-        if self.metrics.width == 0 || self.metrics.height == 0 {
+        if self.metrics.width == 0 || self.metrics.height == 0 || self.lines.is_empty() {
             self.data = Some(ImtBitmapData::Empty);
             return Ok(());
         }

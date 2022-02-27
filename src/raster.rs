@@ -217,8 +217,8 @@ impl ImtRaster {
             |_| {},
         )
         .unwrap();
-        let set_pool =
-            SingleLayoutDescSetPool::new(pipeline.layout().descriptor_set_layouts()[0].clone());
+        
+        let set_pool = SingleLayoutDescSetPool::new(pipeline.layout().set_layouts()[0].clone());
         let raster_to_image = opts.raster_to_image;
         let raster_image_format = opts.raster_image_format;
 

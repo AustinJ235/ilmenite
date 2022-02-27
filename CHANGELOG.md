@@ -1,8 +1,13 @@
 # Unreleased
 
+- **BREAKING** [PENDING] Update dependency `vulkano` & `vulkano-shaders` to `0.29`.
+- Fixed issue where an empty buffer was created during raster(gpu) when a glyph didn't contain any countours but had a size.
+    - GPU raster will now set `ImtBitmapData::Empty` when there are no countours. This was already set previously when size was zero.
+    - CPU raster will now set `ImtBitmapData::Empty` when size is zero or there are no counters.
+
 # Version 0.9.0 (January 5th, 2022)
 
-- **BREAKING* Update dependency `vulkano` & `vulkano-shaders` to `0.28`.
+- **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.28`.
 
 # Version 0.8.0 (December 7th, 2021)
 

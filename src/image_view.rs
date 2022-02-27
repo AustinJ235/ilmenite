@@ -248,6 +248,12 @@ unsafe impl DeviceOwned for ImtImageView {
     }
 }
 
+impl std::fmt::Debug for ImtImageView {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(fmt, "<Vulkan image view {:?}>", self.internal_object())
+    }
+}
+
 unsafe impl ImageAccess for ImtImageView {
     #[inline]
     fn inner(&self) -> ImageInner<'_> {
