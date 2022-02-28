@@ -1,8 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
-use vulkano::device::physical::FormatFeatures;
 use vulkano::device::{Device, DeviceOwned};
-use vulkano::format::Format;
+use vulkano::format::{Format, FormatFeatures};
 use vulkano::image::immutable::SubImage;
 use vulkano::image::view::{ImageView, ImageViewCreationError, ImageViewType};
 use vulkano::image::{
@@ -139,7 +138,7 @@ pub struct ImtImageView {
 impl ImtImageView {
     pub fn from_storage(image: Arc<StorageImage>) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(Arc::new(ImageVarient::Storage(image)))?,
+            view: ImageView::new_default(Arc::new(ImageVarient::Storage(image)))?,
         }))
     }
 
@@ -147,13 +146,13 @@ impl ImtImageView {
         image: Arc<ImmutableImage>,
     ) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(Arc::new(ImageVarient::Immutable(image)))?,
+            view: ImageView::new_default(Arc::new(ImageVarient::Immutable(image)))?,
         }))
     }
 
     pub fn from_sub(image: Arc<SubImage>) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(Arc::new(ImageVarient::Sub(image)))?,
+            view: ImageView::new_default(Arc::new(ImageVarient::Sub(image)))?,
         }))
     }
 
@@ -161,7 +160,7 @@ impl ImtImageView {
         image: Arc<AttachmentImage>,
     ) -> Result<Arc<Self>, ImageViewCreationError> {
         Ok(Arc::new(ImtImageView {
-            view: ImageView::new(Arc::new(ImageVarient::Attachment(image)))?,
+            view: ImageView::new_default(Arc::new(ImageVarient::Attachment(image)))?,
         }))
     }
 
@@ -203,7 +202,7 @@ unsafe impl ImageViewAbstract for ImtImageView {
     }
 
     #[inline]
-    fn format(&self) -> Format {
+    fn format(&self) -> Option<Format> {
         self.view.format()
     }
 
@@ -223,8 +222,8 @@ unsafe impl ImageViewAbstract for ImtImageView {
     }
 
     #[inline]
-    fn ty(&self) -> ImageViewType {
-        self.view.ty()
+    fn view_type(&self) -> ImageViewType {
+        self.view.view_type()
     }
 
     #[inline]

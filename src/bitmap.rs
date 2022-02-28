@@ -117,7 +117,7 @@ impl ImtGlyphBitmap {
             self.data = Some(ImtBitmapData::Empty);
             return Ok(());
         }
-        
+
         let ray_count = context.rays.len();
         let sample_count = context.samples.len();
 
