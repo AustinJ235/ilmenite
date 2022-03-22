@@ -3,6 +3,11 @@ pub mod glyph_cs {
 		ty: "compute",
 		vulkan_version: "1.1",
 		spirv_version: "1.5",
+		types_meta: {
+            use bytemuck::{Pod, Zeroable};
+
+            #[derive(Clone, Copy, Zeroable, Pod)]
+        },
 		src: "
 #version 450
 
