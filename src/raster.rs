@@ -10,7 +10,7 @@ use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
 use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
+    AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBuffer,
 };
 use vulkano::descriptor_set::SingleLayoutDescSetPool;
 use vulkano::device::{Device, Queue};
@@ -167,7 +167,7 @@ impl ImtRaster {
         let common_cpu_buf = CpuAccessibleBuffer::from_data(
             device.clone(),
             BufferUsage {
-                transfer_source: true,
+                transfer_src: true,
                 ..BufferUsage::none()
             },
             false,
@@ -182,7 +182,7 @@ impl ImtRaster {
         let common_dev_buf = DeviceLocalBuffer::new(
             device.clone(),
             BufferUsage {
-                transfer_destination: true,
+                transfer_dst: true,
                 uniform_buffer: true,
                 ..BufferUsage::none()
             },
@@ -197,7 +197,9 @@ impl ImtRaster {
         )
         .unwrap();
 
-        cmd_buf.copy_buffer(common_cpu_buf, common_dev_buf.clone()).unwrap();
+        cmd_buf
+            .copy_buffer(CopyBufferInfo::buffers(common_cpu_buf, common_dev_buf.clone()))
+            .unwrap();
 
         cmd_buf
             .build()

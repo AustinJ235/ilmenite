@@ -8,7 +8,7 @@ use std::sync::Arc;
 use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
 use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBuffer,
+    AutoCommandBufferBuilder, CommandBufferUsage, CopyImageToBufferInfo, PrimaryCommandBuffer,
 };
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
@@ -278,7 +278,7 @@ impl ImtGlyphBitmap {
             )
             .unwrap();
 
-        let bitmap_img = ImtImageView::from_storage(
+        let bitmap_img = ImtImageView::new(
             StorageImage::with_usage(
                 context.device.clone(),
                 ImageDimensions::Dim2d {
@@ -288,7 +288,7 @@ impl ImtGlyphBitmap {
                 },
                 context.raster_image_format,
                 ImageUsage {
-                    transfer_source: true,
+                    transfer_src: true,
                     storage: true,
                     ..ImageUsage::none()
                 },
@@ -359,7 +359,7 @@ impl ImtGlyphBitmap {
                     context.device.clone(),
                     len,
                     BufferUsage {
-                        transfer_destination: true,
+                        transfer_dst: true,
                         ..BufferUsage::none()
                     },
                     true,
@@ -374,7 +374,12 @@ impl ImtGlyphBitmap {
             )
             .unwrap();
 
-            cmd_buf.copy_image_to_buffer(bitmap_img, bitmap_buf.clone()).unwrap();
+            cmd_buf
+                .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
+                    bitmap_img,
+                    bitmap_buf.clone(),
+                ))
+                .unwrap();
 
             cmd_buf
                 .build()
