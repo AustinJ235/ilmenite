@@ -14,8 +14,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vulkano = { "git" = "https://github.com/vulkano-rs/vulkano.git", rev = "3ae9ec0" }
-vulkano-shaders = { "git" = "https://github.com/vulkano-rs/vulkano.git", rev = "3ae9ec0" }
+vulkano = { "git" = "https://github.com/vulkano-rs/vulkano.git", rev = "18f6833" }
+vulkano-shaders = { "git" = "https://github.com/vulkano-rs/vulkano.git", rev = "18f6833" }
 ash = "0.37"
 allsorts = { version = "0.10.0", default-features = false, features = ["flate2_rust"] }
 ordered-float = "3.0.0"
