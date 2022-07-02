@@ -1,6 +1,12 @@
 # Unreleased
 
-# Version 0.9.0 (March 22nd, 2022)
+- **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.30`.
+- Update dependency `ordered-float` to `3.0`.
+- Update dependency `allsorts` to `0.10`.
+    - Covers CVE-2022-24713
+    - Reduced features reducing dependencies.
+
+# Version 0.10.0 (March 22nd, 2022)
 
 - **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.29`.
 - Fixed issue where an empty buffer was created during raster(gpu) when a glyph didn't contain any countours but had a size.
