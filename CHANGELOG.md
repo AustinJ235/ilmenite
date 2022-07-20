@@ -1,5 +1,7 @@
 # Unreleased
 
+# Version 0.10.0 (July 20th, 2022)
+
 - **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.30`.
 - Update dependency `ordered-float` to `3.0`.
 - Update dependency `allsorts` to `0.10`.
