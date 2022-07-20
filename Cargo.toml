@@ -1,6 +1,6 @@
 [package]
 name = "ilmenite"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Austin Johnson <me@austinj.me>"]
 repository = "https://github.com/AustinJ235/ilmenite"
 documentation = "https://docs.rs/ilmenite"
@@ -9,16 +9,16 @@ license = "MIT"
 readme = "README.md"
 keywords = ["vulkan", "text", "shaper", "raster"]
 categories = ["graphics","gui","parsing","text-processing"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vulkano = "0.29.0"
-vulkano-shaders = "0.29.0"
-ash = "0.36"
-allsorts = "0.7.1"
-ordered-float = "2.10.0"
-parking_lot = "0.12.0"
+vulkano = "0.30"
+vulkano-shaders = "0.30"
+ash = "0.37"
+allsorts = { version = "0.10.0", default-features = false, features = ["flate2_rust"] }
+ordered-float = "3.0.0"
+parking_lot = "0.12.1"
 crossbeam = "0.8.1"
-bytemuck = { version = "1.7", features = ["derive", "extern_crate_std", "min_const_generics"] }
+bytemuck = "1.7"
