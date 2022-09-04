@@ -1,9 +1,10 @@
-use crate::{
-    ImtError, ImtErrorSrc, ImtErrorTy, ImtLang, ImtParsedGlyph, ImtParser, ImtPosition,
-    ImtScript,
-};
-use allsorts::gpos::Placement;
 use std::sync::Arc;
+
+use allsorts::gpos::Placement;
+
+use crate::{
+    ImtError, ImtErrorSrc, ImtErrorTy, ImtLang, ImtParsedGlyph, ImtParser, ImtPosition, ImtScript,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtVertAlign {
@@ -119,8 +120,7 @@ impl ImtShaper {
         let mut lines: Vec<(usize, usize, f32)> = Vec::new();
 
         'line: loop {
-            let infos =
-                parser.retreive_info(raw_glyphs[shape_from..].to_vec(), script, lang)?;
+            let infos = parser.retreive_info(raw_glyphs[shape_from..].to_vec(), script, lang)?;
 
             let mut x: f32 = 0.0;
             let mut x_offset = 0.0;
@@ -216,8 +216,7 @@ impl ImtShaper {
 
             for (start, end, width) in &mut lines {
                 if start != end {
-                    let shift =
-                        (opts.body_width / (font_props.scaler * opts.text_height)) - *width;
+                    let shift = (opts.body_width / (font_props.scaler * opts.text_height)) - *width;
                     let mut new_start = None;
 
                     for i in *start..*end {

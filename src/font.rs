@@ -1,12 +1,14 @@
-use crate::{
-    ImtError, ImtErrorSrc, ImtErrorTy, ImtGlyph, ImtLang, ImtParser, ImtRaster, ImtRasterOpts,
-    ImtScript, ImtShapeOpts, ImtShaper,
-};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
+
 use vulkano::device::{Device, Queue};
+
+use crate::{
+    ImtError, ImtErrorSrc, ImtErrorTy, ImtGlyph, ImtLang, ImtParser, ImtRaster, ImtRasterOpts,
+    ImtScript, ImtShapeOpts, ImtShaper,
+};
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum ImtWeight {
@@ -133,7 +135,8 @@ impl ImtFont {
             parsed_glyphs,
         )?;
         let rastered_glyphs =
-            self.raster.raster_shaped_glyphs(&self.parser, text_height, shaped_glyphs)?;
+            self.raster
+                .raster_shaped_glyphs(&self.parser, text_height, shaped_glyphs)?;
         let font_props = self.parser.font_props();
 
         Ok(rastered_glyphs

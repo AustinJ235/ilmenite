@@ -1,10 +1,6 @@
-use crate::raster::{CpuRasterContext, GpuRasterContext};
-use crate::shaders::glyph_cs;
-use crate::{
-    ImtError, ImtGeometry, ImtImageView, ImtParsedGlyph, ImtParser, ImtPoint, ImtRasterOpts,
-};
 use std::iter;
 use std::sync::Arc;
+
 use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
 use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
@@ -14,6 +10,12 @@ use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
 use vulkano::pipeline::{Pipeline, PipelineBindPoint};
 use vulkano::sync::GpuFuture;
+
+use crate::raster::{CpuRasterContext, GpuRasterContext};
+use crate::shaders::glyph_cs;
+use crate::{
+    ImtError, ImtGeometry, ImtImageView, ImtParsedGlyph, ImtParser, ImtPoint, ImtRasterOpts,
+};
 
 #[derive(Clone)]
 pub enum ImtBitmapData {
@@ -121,23 +123,20 @@ impl ImtGlyphBitmap {
         let ray_count = context.rays.len();
         let sample_count = context.samples.len();
 
-        let ray_intersects = |l1p1: [f32; 2],
-                              l1p2: [f32; 2],
-                              l2p1: [f32; 2],
-                              l2p2: [f32; 2]|
-         -> Option<[f32; 2]> {
-            let r = [l1p2[0] - l1p1[0], l1p2[1] - l1p1[1]];
-            let s = [l2p2[0] - l2p1[0], l2p2[1] - l2p1[1]];
-            let det = (r[0] * s[1]) - (r[1] * s[0]);
-            let u = (((l2p1[0] - l1p1[0]) * r[1]) - ((l2p1[1] - l1p1[1]) * r[0])) / det;
-            let t = (((l2p1[0] - l1p1[0]) * s[1]) - ((l2p1[1] - l1p1[1]) * s[0])) / det;
+        let ray_intersects =
+            |l1p1: [f32; 2], l1p2: [f32; 2], l2p1: [f32; 2], l2p2: [f32; 2]| -> Option<[f32; 2]> {
+                let r = [l1p2[0] - l1p1[0], l1p2[1] - l1p1[1]];
+                let s = [l2p2[0] - l2p1[0], l2p2[1] - l2p1[1]];
+                let det = (r[0] * s[1]) - (r[1] * s[0]);
+                let u = (((l2p1[0] - l1p1[0]) * r[1]) - ((l2p1[1] - l1p1[1]) * r[0])) / det;
+                let t = (((l2p1[0] - l1p1[0]) * s[1]) - ((l2p1[1] - l1p1[1]) * s[0])) / det;
 
-            if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 {
-                Some([(l1p1[0] + r[0]) * t, (l1p1[1] + r[1]) * t])
-            } else {
-                None
-            }
-        };
+                if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 {
+                    Some([(l1p1[0] + r[0]) * t, (l1p1[1] + r[1]) * t])
+                } else {
+                    None
+                }
+            };
 
         let cell_height = self.scaler / (sample_count as f32).sqrt();
         let cell_width = cell_height / 3.0;
@@ -149,8 +148,10 @@ impl ImtGlyphBitmap {
             for ray in context.rays.iter() {
                 let mut hits = 0_isize;
 
-                let ray_dest =
-                    [ray_src[0] + (ray[0] * ray_len), ray_src[1] + (ray[1] * ray_len)];
+                let ray_dest = [
+                    ray_src[0] + (ray[0] * ray_len),
+                    ray_src[1] + (ray[1] * ray_len),
+                ];
 
                 let ray_angle = (ray[1] / ray[0]).atan();
                 let mut ray_max_dist = (cell_width / 2.0) / ray_angle.cos();
@@ -162,9 +163,12 @@ impl ImtGlyphBitmap {
                 let mut ray_min_dist = ray_max_dist;
 
                 for line in self.lines.iter() {
-                    match ray_intersects(ray_src, ray_dest, [line.0.x, line.0.y], [
-                        line.1.x, line.1.y,
-                    ]) {
+                    match ray_intersects(
+                        ray_src,
+                        ray_dest,
+                        [line.0.x, line.0.y],
+                        [line.1.x, line.1.y],
+                    ) {
                         Some(intersect_point) => {
                             let dist = ((ray_src[0] - intersect_point[0]).powi(2)
                                 + (ray_src[1] - intersect_point[1]).powi(2))
@@ -213,8 +217,7 @@ impl ImtGlyphBitmap {
             let mut fill_amt_sum = 0.0;
 
             for i in 0..sample_count {
-                if let Some(fill_amt) =
-                    sample_filled(transform_coords(coords, i, offset), ray_len)
+                if let Some(fill_amt) = sample_filled(transform_coords(coords, i, offset), ray_len)
                 {
                     fill_amt_sum += fill_amt;
                 }
@@ -306,7 +309,9 @@ impl ImtGlyphBitmap {
                 ..BufferUsage::none()
             },
             false,
-            self.lines.iter().map(|line| [line.0.x, line.0.y, line.1.x, line.1.y]),
+            self.lines
+                .iter()
+                .map(|line| [line.0.x, line.0.y, line.1.x, line.1.y]),
         )
         .unwrap();
 
@@ -415,8 +420,7 @@ impl ImtGlyphBitmap {
     fn draw_geometry(&mut self, geo: &ImtGeometry) {
         match geo {
             &ImtGeometry::Line(ref points) => self.draw_line(&points[0], &points[1]),
-            &ImtGeometry::Curve(ref points) =>
-                self.draw_curve(&points[0], &points[1], &points[2]),
+            &ImtGeometry::Curve(ref points) => self.draw_curve(&points[0], &points[1], &points[2]),
         }
     }
 

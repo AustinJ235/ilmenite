@@ -29,6 +29,8 @@ pub mod script;
 pub mod shaders;
 pub mod shape;
 
+use std::collections::HashMap;
+
 pub use bitmap::{ImtBitmapData, ImtGlyphBitmap};
 use crossbeam::sync::ShardedLock;
 pub use error::{ImtError, ImtErrorSrc, ImtErrorTy};
@@ -37,15 +39,11 @@ pub use font::{ImtFont, ImtWeight};
 pub use image_view::ImtImageView;
 pub use parse::{ImtFontProps, ImtParsedGlyph, ImtParser};
 pub use primative::{ImtGeometry, ImtPoint, ImtPosition};
-pub use raster::{
-    ImtFillQuality, ImtRaster, ImtRasterOpts, ImtRasteredGlyph, ImtSampleQuality,
-};
+pub use raster::{ImtFillQuality, ImtRaster, ImtRasterOpts, ImtRasteredGlyph, ImtSampleQuality};
 pub use script::{ImtLang, ImtScript};
 pub use shape::{
-    ImtGlyphInfo, ImtHoriAlign, ImtShapeOpts, ImtShapedGlyph, ImtShaper, ImtTextWrap,
-    ImtVertAlign,
+    ImtGlyphInfo, ImtHoriAlign, ImtShapeOpts, ImtShapedGlyph, ImtShaper, ImtTextWrap, ImtVertAlign,
 };
-use std::collections::HashMap;
 use vulkano::device::Features as VkFeatures;
 
 pub fn ilmenite_required_vk_features() -> VkFeatures {
@@ -99,7 +97,14 @@ impl Ilmenite {
                 family,
                 weight,
             })
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Ilmenite, ImtErrorTy::MissingFont))?
-            .glyphs_for_text(text_height, shape_ops.unwrap_or(ImtShapeOpts::default()), text)
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Ilmenite,
+                ImtErrorTy::MissingFont,
+            ))?
+            .glyphs_for_text(
+                text_height,
+                shape_ops.unwrap_or(ImtShapeOpts::default()),
+                text,
+            )
     }
 }

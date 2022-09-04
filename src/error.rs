@@ -82,7 +82,10 @@ impl ImtError {
 
     // TODO: Implement mapping of ShapingError
     pub fn allsorts_shaping(src: ImtErrorSrc, err: ShapingError) -> Self {
-        println!("Basalt Text: Returning unimplemented error! src: {:?}, err: {:?}", src, err);
+        println!(
+            "Basalt Text: Returning unimplemented error! src: {:?}, err: {:?}",
+            src, err
+        );
 
         Self::src_and_ty(src, ImtErrorTy::Unimplemented)
     }

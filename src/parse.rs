@@ -1,4 +1,8 @@
-use crate::{ImtError, ImtErrorSrc, ImtErrorTy, ImtGeometry, ImtLang, ImtPoint, ImtScript};
+use std::collections::BTreeMap;
+use std::rc::Rc;
+use std::sync::atomic::{self, AtomicBool};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
 
 use allsorts::binary::read::ReadScope;
 use allsorts::font::read_cmap_subtable;
@@ -8,18 +12,13 @@ use allsorts::layout::{new_layout_cache, GDEFTable, LayoutCache, LayoutTable, GP
 use allsorts::tables::cmap::{Cmap, CmapSubtable};
 use allsorts::tables::glyf::{self, CompositeGlyphArgument, GlyfRecord, GlyfTable};
 use allsorts::tables::loca::LocaTable;
-use allsorts::tables::{
-    HeadTable, HheaTable, HmtxTable, MaxpTable, OpenTypeData, OpenTypeFont,
-};
+use allsorts::tables::{HeadTable, HheaTable, HmtxTable, MaxpTable, OpenTypeData, OpenTypeFont};
 use allsorts::tag;
 use crossbeam::queue::SegQueue;
 use crossbeam::sync::{Parker, Unparker};
 use parking_lot::{Condvar, Mutex};
-use std::collections::BTreeMap;
-use std::rc::Rc;
-use std::sync::atomic::{self, AtomicBool};
-use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+
+use crate::{ImtError, ImtErrorSrc, ImtErrorTy, ImtGeometry, ImtLang, ImtPoint, ImtScript};
 
 struct ParserReqRes<T> {
     cond: Condvar,
@@ -52,8 +51,18 @@ impl<T> ParserReqRes<T> {
 
 enum ParserReq {
     FontProps(Arc<ParserReqRes<ImtFontProps>>),
-    RetrieveText(Arc<ParserReqRes<Vec<Arc<ImtParsedGlyph>>>>, String, ImtScript, ImtLang),
-    RetrieveInfo(Arc<ParserReqRes<Vec<Info>>>, Vec<RawGlyph<()>>, ImtScript, ImtLang),
+    RetrieveText(
+        Arc<ParserReqRes<Vec<Arc<ImtParsedGlyph>>>>,
+        String,
+        ImtScript,
+        ImtLang,
+    ),
+    RetrieveInfo(
+        Arc<ParserReqRes<Vec<Info>>>,
+        Vec<RawGlyph<()>>,
+        ImtScript,
+        ImtLang,
+    ),
 }
 
 pub struct ImtParser {
@@ -148,7 +157,12 @@ impl ImtParser {
         lang: ImtLang,
     ) -> Result<Vec<Info>, ImtError> {
         let res = ParserReqRes::new();
-        self.requests.push(ParserReq::RetrieveInfo(res.clone(), raw_glyphs, script, lang));
+        self.requests.push(ParserReq::RetrieveInfo(
+            res.clone(),
+            raw_glyphs,
+            script,
+            lang,
+        ));
         self.unparker.unpark();
         res.get()
     }
@@ -213,16 +227,20 @@ impl ImtParserNonSend {
 
         let otf = match data {
             OpenTypeData::Single(t) => t,
-            _ =>
+            _ => {
                 return Err(ImtError::src_and_ty(
                     ImtErrorSrc::File,
                     ImtErrorTy::FileUnsupportedFormat,
-                )),
+                ))
+            },
         };
 
         let cmap = otf
             .find_table_record(tag::CMAP)
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Cmap, ImtErrorTy::FileMissingTable))?
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Cmap,
+                ImtErrorTy::FileMissingTable,
+            ))?
             .read_table(&scope)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
             .read::<Cmap>()
@@ -230,11 +248,17 @@ impl ImtParserNonSend {
 
         let cmap_sub = read_cmap_subtable(&cmap)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Cmap, ImtErrorTy::FileMissingSubTable))?;
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Cmap,
+                ImtErrorTy::FileMissingSubTable,
+            ))?;
 
         let maxp = otf
             .find_table_record(tag::MAXP)
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Maxp, ImtErrorTy::FileMissingTable))?
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Maxp,
+                ImtErrorTy::FileMissingTable,
+            ))?
             .read_table(&scope)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Maxp, e))?
             .read::<MaxpTable>()
@@ -242,30 +266,35 @@ impl ImtParserNonSend {
 
         let gdef_op = match otf.find_table_record(tag::GDEF) {
             None => None,
-            Some(v) =>
+            Some(v) => {
                 Some(
                     v.read_table(&scope)
                         .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GDEF, e))?
                         .read::<GDEFTable>()
                         .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GDEF, e))?,
-                ),
+                )
+            },
         };
 
         let gpos_op = match otf.find_table_record(tag::GPOS) {
             None => None,
-            Some(v) =>
+            Some(v) => {
                 Some(
                     v.read_table(&scope)
                         .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GPOS, e))?
                         .read::<LayoutTable<GPOS>>()
                         .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::GPOS, e))?,
                 )
-                .map(|v| new_layout_cache(v)),
+                .map(|v| new_layout_cache(v))
+            },
         };
 
         let hhea = otf
             .find_table_record(tag::HHEA)
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Hhea, ImtErrorTy::FileMissingTable))?
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Hhea,
+                ImtErrorTy::FileMissingTable,
+            ))?
             .read_table(&scope)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Hhea, e))?
             .read::<HheaTable>()
@@ -273,7 +302,10 @@ impl ImtParserNonSend {
 
         let hmtx = otf
             .find_table_record(tag::HMTX)
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Hmtx, ImtErrorTy::FileMissingTable))?
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Hmtx,
+                ImtErrorTy::FileMissingTable,
+            ))?
             .read_table(&scope)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Hmtx, e))?
             .read_dep::<HmtxTable>((maxp.num_glyphs as usize, hhea.num_h_metrics as usize))
@@ -281,7 +313,10 @@ impl ImtParserNonSend {
 
         let head = otf
             .find_table_record(tag::HEAD)
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Head, ImtErrorTy::FileMissingTable))?
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Head,
+                ImtErrorTy::FileMissingTable,
+            ))?
             .read_table(&scope)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Head, e))?
             .read::<HeadTable>()
@@ -289,7 +324,10 @@ impl ImtParserNonSend {
 
         let loca = otf
             .find_table_record(tag::LOCA)
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Loca, ImtErrorTy::FileMissingTable))?
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Loca,
+                ImtErrorTy::FileMissingTable,
+            ))?
             .read_table(&scope)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Loca, e))?
             .read_dep::<LocaTable>((maxp.num_glyphs as usize, head.index_to_loc_format))
@@ -297,7 +335,10 @@ impl ImtParserNonSend {
 
         let glyf = otf
             .find_table_record(tag::GLYF)
-            .ok_or(ImtError::src_and_ty(ImtErrorSrc::Glyf, ImtErrorTy::FileMissingTable))?
+            .ok_or(ImtError::src_and_ty(
+                ImtErrorSrc::Glyf,
+                ImtErrorTy::FileMissingTable,
+            ))?
             .read_table(&scope)
             .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e))?
             .read_dep::<GlyfTable>(unsafe { &*(&loca as *const _) })
@@ -305,14 +346,15 @@ impl ImtParserNonSend {
 
         let gsub_op = match otf.find_table_record(tag::GSUB) {
             None => None,
-            Some(v) =>
+            Some(v) => {
                 Some(
                     v.read_table(&scope)
                         .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Gsub, e))?
                         .read::<LayoutTable<GSUB>>()
                         .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Gsub, e))?,
                 )
-                .map(|v| new_layout_cache(v)),
+                .map(|v| new_layout_cache(v))
+            },
         };
 
         let default_dpi = 72.0;
@@ -394,7 +436,10 @@ impl ImtParserNonSend {
                 self.cmap_sub
                     .map_glyph('?' as u32)
                     .map_err(|e| ImtError::allsorts_parse(ImtErrorSrc::Cmap, e))?
-                    .ok_or(ImtError::src_and_ty(ImtErrorSrc::Cmap, ImtErrorTy::MissingGlyph))?,
+                    .ok_or(ImtError::src_and_ty(
+                        ImtErrorSrc::Cmap,
+                        ImtErrorTy::MissingGlyph,
+                    ))?,
             );
 
         Ok(RawGlyph {
@@ -454,23 +499,20 @@ impl ImtParserNonSend {
                 let mut max_y = None;
 
                 while let Some((geometry_index, gox, goy)) = geometry_indexes.pop() {
-                    let glyf_record =
-                        self.glyf.records.get_mut(geometry_index as usize).ok_or(
-                            ImtError::src_and_ty(ImtErrorSrc::Glyf, ImtErrorTy::MissingGlyph),
-                        )?;
+                    let glyf_record = self.glyf.records.get_mut(geometry_index as usize).ok_or(
+                        ImtError::src_and_ty(ImtErrorSrc::Glyf, ImtErrorTy::MissingGlyph),
+                    )?;
 
-                    if let Some(parsed_record) =
-                        match &glyf_record {
-                            &GlyfRecord::Present {
-                                ref scope,
-                                ..
-                            } =>
-                                Some(GlyfRecord::Parsed(scope.read::<glyf::Glyph>().map_err(
-                                    |e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e),
-                                )?)),
-                            _ => None,
-                        }
-                    {
+                    if let Some(parsed_record) = match &glyf_record {
+                        &GlyfRecord::Present {
+                            ref scope, ..
+                        } => {
+                            Some(GlyfRecord::Parsed(scope.read::<glyf::Glyph>().map_err(
+                                |e| ImtError::allsorts_parse(ImtErrorSrc::Glyf, e),
+                            )?))
+                        },
+                        _ => None,
+                    } {
                         *glyf_record = parsed_record;
                     }
 
@@ -528,10 +570,8 @@ impl ImtParserNonSend {
                                                         (contour[p_i].1, contour[p_i].2)
                                                     } else {
                                                         (
-                                                            (contour[p_i].1 + contour[j].1)
-                                                                / 2.0,
-                                                            (contour[p_i].2 + contour[j].2)
-                                                                / 2.0,
+                                                            (contour[p_i].1 + contour[j].1) / 2.0,
+                                                            (contour[p_i].2 + contour[j].2) / 2.0,
                                                         )
                                                     };
 
@@ -541,10 +581,8 @@ impl ImtParserNonSend {
                                                         (contour[n_i].1, contour[n_i].2)
                                                     } else {
                                                         (
-                                                            (contour[n_i].1 + contour[j].1)
-                                                                / 2.0,
-                                                            (contour[n_i].2 + contour[j].2)
-                                                                / 2.0,
+                                                            (contour[n_i].1 + contour[j].1) / 2.0,
+                                                            (contour[n_i].2 + contour[j].2) / 2.0,
                                                         )
                                                     };
 
@@ -571,15 +609,11 @@ impl ImtParserNonSend {
                                                         j + 1
                                                     };
 
-                                                    if simple.flags[contour[n_i].0]
-                                                        .is_on_curve()
-                                                    {
+                                                    if simple.flags[contour[n_i].0].is_on_curve() {
                                                         geometry.push(ImtGeometry::Line([
                                                             ImtPoint {
-                                                                x: contour[j].1 as f32
-                                                                    + gox as f32,
-                                                                y: contour[j].2 as f32
-                                                                    + goy as f32,
+                                                                x: contour[j].1 as f32 + gox as f32,
+                                                                y: contour[j].2 as f32 + goy as f32,
                                                             },
                                                             ImtPoint {
                                                                 x: contour[n_i].1 as f32
@@ -597,9 +631,8 @@ impl ImtParserNonSend {
                                     }
                                 },
                                 glyf::GlyphData::Composite {
-                                    glyphs,
-                                    ..
-                                } =>
+                                    glyphs, ..
+                                } => {
                                     for glyph in glyphs {
                                         let x: f32 = match glyph.argument1 {
                                             CompositeGlyphArgument::U8(v) => v as f32,
@@ -616,7 +649,8 @@ impl ImtParserNonSend {
                                         };
 
                                         geometry_indexes.push((glyph.glyph_index, x, y));
-                                    },
+                                    }
+                                },
                             };
                         },
                         &GlyfRecord::Empty => continue,

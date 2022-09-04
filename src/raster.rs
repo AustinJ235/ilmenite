@@ -1,11 +1,10 @@
-use crate::shaders::glyph_cs;
-use crate::{ImtError, ImtGlyphBitmap, ImtParser, ImtShapedGlyph};
-use crossbeam::sync::{Parker, Unparker};
-use ordered_float::OrderedFloat;
-use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::iter;
 use std::sync::Arc;
+
+use crossbeam::sync::{Parker, Unparker};
+use ordered_float::OrderedFloat;
+use parking_lot::Mutex;
 use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
 use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano::buffer::BufferUsage;
@@ -18,6 +17,9 @@ use vulkano::format::Format;
 use vulkano::pipeline::{ComputePipeline, Pipeline};
 use vulkano::shader::ShaderModule;
 use vulkano::sync::GpuFuture;
+
+use crate::shaders::glyph_cs;
+use crate::{ImtError, ImtGlyphBitmap, ImtParser, ImtShapedGlyph};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ImtFillQuality {
@@ -198,7 +200,10 @@ impl ImtRaster {
         .unwrap();
 
         cmd_buf
-            .copy_buffer(CopyBufferInfo::buffers(common_cpu_buf, common_dev_buf.clone()))
+            .copy_buffer(CopyBufferInfo::buffers(
+                common_cpu_buf,
+                common_dev_buf.clone(),
+            ))
             .unwrap();
 
         cmd_buf
@@ -304,9 +309,7 @@ impl ImtRaster {
             let mut parker_op = None;
 
             // Obtain the current cache state
-            if let Some(cache_state) =
-                cache_lk_op.as_mut().unwrap().get_mut(&(height_key, index))
-            {
+            if let Some(cache_state) = cache_lk_op.as_mut().unwrap().get_mut(&(height_key, index)) {
                 match cache_state {
                     // This glyph has already be completed!
                     &mut RasterCacheState::Completed(ref bitmap) => {
@@ -342,8 +345,11 @@ impl ImtRaster {
 
                     // Should be safe to unwrap as the state should already be present given
                     // the previous logic.
-                    let cache_state =
-                        cache_lk_op.as_ref().unwrap().get(&(height_key, index)).unwrap();
+                    let cache_state = cache_lk_op
+                        .as_ref()
+                        .unwrap()
+                        .get(&(height_key, index))
+                        .unwrap();
 
                     match cache_state {
                         // As expected the glyph is completed.
@@ -371,10 +377,10 @@ impl ImtRaster {
             }
 
             // Update the cache to inform it that this thread is going to rasterize the glyph.
-            cache_lk_op
-                .as_mut()
-                .unwrap()
-                .insert((height_key, index), RasterCacheState::Incomplete(Vec::new()));
+            cache_lk_op.as_mut().unwrap().insert(
+                (height_key, index),
+                RasterCacheState::Incomplete(Vec::new()),
+            );
 
             // Drop the lock so other threads can keep doing things.
             cache_lk_op = None;
@@ -420,10 +426,10 @@ impl ImtRaster {
             cache_lk_op = Some(self.cache.lock());
 
             // Update the state to completed and retrieve the old one.
-            let old_state = cache_lk_op
-                .as_mut()
-                .unwrap()
-                .insert((height_key, index), RasterCacheState::Completed(bitmap.clone()));
+            let old_state = cache_lk_op.as_mut().unwrap().insert(
+                (height_key, index),
+                RasterCacheState::Completed(bitmap.clone()),
+            );
 
             // Inform all the other threads that may have been waiting.
             if let Some(RasterCacheState::Incomplete(unparkers)) = old_state {
