@@ -281,7 +281,7 @@ impl ImtGlyphBitmap {
             )
             .unwrap();
 
-        let bitmap_img = ImtImageView::new(
+        let bitmap_img = ImtImageView::from_storage(
             StorageImage::with_usage(
                 context.device.clone(),
                 ImageDimensions::Dim2d {
