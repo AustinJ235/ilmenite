@@ -26,19 +26,13 @@ pub enum ImtSSAA {
     X1,
     /// 4 Samples
     X2,
-    /// 9 Samples
-    X3,
     /// 16 samples
     #[default]
     X4,
-    /// 25 samples
-    X5,
-    /// 36 samples
-    X6,
-    /// 49 samples
-    X7,
     /// 64 samples
     X8,
+    /// 256 samples
+    X16,
 }
 
 impl ImtSSAA {
@@ -46,12 +40,9 @@ impl ImtSSAA {
         match self {
             Self::X1 => 1,
             Self::X2 => 2,
-            Self::X3 => 3,
             Self::X4 => 4,
-            Self::X5 => 5,
-            Self::X6 => 6,
-            Self::X7 => 7,
             Self::X8 => 8,
+            Self::X16 => 16,
         }
     }
 }

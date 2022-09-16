@@ -516,8 +516,16 @@ impl ImtRaster for ImtRasterGpu {
                     },
                     Some(vert_buf) => {
                         let parsed = &shaped_glyphs[shaped_i].parsed;
-                        let width = ((parsed.max_x - parsed.min_x) * scaler).ceil() as u32;
-                        let height = ((parsed.max_y - parsed.min_y) * scaler).ceil() as u32;
+
+                        // TODO: This block of variables is all wrong
+                        let width = ((parsed.max_x - parsed.min_x) * scaler).ceil() as u32 + 1;
+                        let height = ((parsed.max_y - parsed.min_y) * scaler).ceil() as u32 + 1;
+                        let bearing_x = (parsed.min_x * scaler).ceil();
+                        let bearing_y = (font_props.ascender * scaler).ceil() - (parsed.max_y * scaler).ceil();
+                        let scale_x = (width as f32 - 2.0) / width as f32;
+                        let scale_y = (height as f32 - 2.0) / height as f32;
+                        let offset_x = (1.0 / width as f32) / 2.0;
+                        let offset_y = (1.0 / height as f32) / 2.0;
 
                         if width == 0 || height == 0 {
                             cache.bitmaps.insert(
@@ -542,10 +550,10 @@ impl ImtRaster for ImtRasterGpu {
                         let stencil_extent = match self.ops.subpixel {
                             ImtSubPixel::None => [width * ssaa, height * ssaa],
                             ImtSubPixel::RGB | ImtSubPixel::BGR => {
-                                [width * ssaa * 3, height * ssaa]
+                                [extent[0] * ssaa * 3, extent[1] * ssaa]
                             },
                             ImtSubPixel::VRGB | ImtSubPixel::VBGR => {
-                                [width * ssaa, height * ssaa * 3]
+                                [extent[0] * ssaa, extent[1] * ssaa * 3]
                             },
                         };
 
@@ -669,6 +677,10 @@ impl ImtRaster for ImtRasterGpu {
                                 dimensions: [stencil_extent[0] as f32, stencil_extent[1] as f32],
                                 depth_range: 0.0..1.0,
                             }))
+                            .push_constants(self.stencil_pipeline.layout().clone(), 0, stencil_vs::ty::StencilInfo {
+                                scale: [scale_x, scale_y],
+                                offset: [offset_x, offset_y],
+                            })
                             .bind_pipeline_graphics(self.stencil_pipeline.clone())
                             .bind_vertex_buffers(0, vert_buf.clone())
                             .draw(vert_buf.len() as u32, 1, 0, 0)
@@ -752,8 +764,8 @@ impl ImtRaster for ImtRasterGpu {
                             Arc::new(ImtGlyphBitmap {
                                 width: extent[0],
                                 height: extent[1],
-                                bearing_x: (parsed.min_x * scaler).floor(),
-                                bearing_y: ((font_props.ascender - parsed.max_y) * scaler).floor(),
+                                bearing_x,
+                                bearing_y,
                                 text_height,
                                 glyph_index: glyph_i,
                                 data,
@@ -844,8 +856,13 @@ mod stencil_vs {
             layout(location = 1) in vec2 coords;
             layout(location = 0) out vec2 out_coords;
 
+            layout(push_constant) uniform StencilInfo {
+                vec2 scale;
+                vec2 offset;
+            } info;
+
             void main() {
-                gl_Position = vec4(position, 0.0, 1.0);
+                gl_Position = vec4((position * info.scale) + info.offset, 0.0, 1.0);
                 out_coords = coords;
             }
         "
@@ -963,18 +980,53 @@ mod blur_fs {
             layout(location = 0) in vec2 coords;
             layout(location = 0) out vec4 color;
 
+            float defaultWeighting(float a, float b, float c, float d, float e) {
+                return (a * (8.0 / 256.0))
+                    + (b * (77.0 / 256.0))
+                    + (c * (86.0 / 256.0))
+                    + (d * (77.0 / 256.0))
+                    + (e * (8.0 / 256.0));
+            }
+
+            vec4 defaultFilter(vec4 leftPixel, vec4 thisPixel, vec4 rightPixel) {
+                return vec4(
+                    defaultWeighting(
+                        leftPixel.g, leftPixel.b, thisPixel.r,
+                        thisPixel.g, thisPixel.b
+                    ),
+                    defaultWeighting(
+                        leftPixel.b, thisPixel.r, thisPixel.g,
+                        thisPixel.b, rightPixel.r
+                    ),
+                    defaultWeighting(
+                        thisPixel.r, thisPixel.g, thisPixel.b,
+                        rightPixel.r, rightPixel.g
+                    ),
+                    thisPixel.a
+                );
+            }
+
+            float lightWeighting(float a, float b, float c) {
+                return (a * (85 / 256.0))
+                    + (b * (86 / 256.0))
+                    + (c * (85 / 256.0));
+            }
+
+            vec4 lightFilter(vec4 leftPixel, vec4 thisPixel, vec4 rightPixel) {
+                return vec4(
+                    lightWeighting(leftPixel.b, thisPixel.r, thisPixel.g),
+                    lightWeighting(thisPixel.r, thisPixel.g, thisPixel.b),
+                    lightWeighting(thisPixel.g, thisPixel.b, rightPixel.r),
+                    thisPixel.a
+                );
+            }
+
             void main() {
                 float pixelStrideX = 1.0 / float(info.width);
-                float leftSubG = texture(sampled, coords - vec2(pixelStrideX, 0.0)).g;
-                float rightSubR = texture(sampled, coords + vec2(pixelStrideX, 0.0)).r;
-                vec4 thisColor = texture(sampled, coords).rgba;
-
-                color = vec4(
-                    (leftSubG + thisColor.r + thisColor.g) / 3.0,
-                    (thisColor.r + thisColor.g + thisColor.b) / 3.0,
-                    (thisColor.g + thisColor.b + rightSubR) / 3.0,
-                    thisColor.a
-                );
+                vec4 leftPixel = texture(sampled, coords - vec2(pixelStrideX, 0.0));
+                vec4 thisPixel = texture(sampled, coords).rgba;
+                vec4 rightPixel = texture(sampled, coords + vec2(pixelStrideX, 0.0));
+                color = defaultFilter(leftPixel, thisPixel, rightPixel);
             }
         "
     }
