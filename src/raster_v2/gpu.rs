@@ -25,7 +25,7 @@ use vulkano::pipeline::graphics::vertex_input::BuffersDefinition;
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint, StateMode};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
-use vulkano::sampler::{self, Sampler, SamplerCreateInfo};
+use vulkano::sampler::{self, Sampler, SamplerCreateInfo, SamplerAddressMode};
 use vulkano::shader::ShaderModule;
 use vulkano::sync::GpuFuture;
 use vulkano::{impl_vertex, single_pass_renderpass};
@@ -166,15 +166,6 @@ impl ImtRasterGpu {
             .build(queue.device().clone())
             .unwrap();
 
-        let sampler = Sampler::new(
-            queue.device().clone(),
-            SamplerCreateInfo {
-                mag_filter: sampler::Filter::Nearest,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
         let sample_pipeline = GraphicsPipeline::start()
             .vertex_input_state(BuffersDefinition::new().vertex::<SquareVertex>())
             .vertex_shader(square_vs.entry_point("main").unwrap(), ())
@@ -192,7 +183,18 @@ impl ImtRasterGpu {
             .render_pass(Subpass::from(sample_renderpass.clone(), 0).unwrap())
             .with_auto_layout(queue.device().clone(), |layout_create_infos| {
                 let binding = layout_create_infos[0].bindings.get_mut(&0).unwrap();
-                binding.immutable_samplers = vec![sampler.clone()];
+                binding.immutable_samplers = vec![
+                    Sampler::new(
+                        queue.device().clone(),
+                        SamplerCreateInfo {
+                            mag_filter: sampler::Filter::Nearest,
+                            border_color: sampler::BorderColor::IntTransparentBlack,
+                            address_mode: [SamplerAddressMode::ClampToBorder; 3],
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap(),
+                ];
             })
             .unwrap();
 
@@ -207,7 +209,18 @@ impl ImtRasterGpu {
             .render_pass(Subpass::from(blur_renderpass.clone(), 0).unwrap())
             .with_auto_layout(queue.device().clone(), |layout_create_infos| {
                 let binding = layout_create_infos[0].bindings.get_mut(&0).unwrap();
-                binding.immutable_samplers = vec![sampler];
+                binding.immutable_samplers = vec![
+                    Sampler::new(
+                        queue.device().clone(),
+                        SamplerCreateInfo {
+                            mag_filter: sampler::Filter::Nearest,
+                            border_color: sampler::BorderColor::FloatTransparentBlack,
+                            address_mode: [SamplerAddressMode::ClampToBorder; 3],
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap(),
+                ];
             })
             .unwrap();
 
@@ -517,16 +530,26 @@ impl ImtRaster for ImtRasterGpu {
                     Some(vert_buf) => {
                         let parsed = &shaped_glyphs[shaped_i].parsed;
 
-                        // TODO: This block of variables is all wrong
-                        let width = ((parsed.max_x - parsed.min_x) * scaler).ceil() as u32 + 1;
-                        let height = ((parsed.max_y - parsed.min_y) * scaler).ceil() as u32 + 1;
-                        let bearing_x = (parsed.min_x * scaler).ceil();
-                        let bearing_y = (font_props.ascender * scaler).ceil() - (parsed.max_y * scaler).ceil();
-                        let scale_x = (width as f32 - 2.0) / width as f32;
-                        let scale_y = (height as f32 - 2.0) / height as f32;
-                        let offset_x = (1.0 / width as f32) / 2.0;
-                        let offset_y = (1.0 / height as f32) / 2.0;
+                        // Think this part is mostly correct
+                        let min_x_raw = parsed.min_x * scaler;
+                        let max_x_raw = parsed.max_x * scaler;
+                        let min_y_raw = parsed.min_y * scaler;
+                        let max_y_raw = parsed.max_y * scaler;
+                        let width = (max_x_raw.ceil() - min_x_raw.floor()) as u32;
+                        let height = (max_y_raw.ceil() - min_y_raw.floor()) as u32;
+                        let raw_width = max_x_raw - min_x_raw;
+                        let raw_height = max_y_raw - min_y_raw;
+                        let scale_x = (raw_width * 2.0) / (width as f32 * 2.0);
+                        let scale_y = (raw_height * 2.0) / (height as f32 * 2.0);
+                        let bearing_x = min_x_raw.floor();
+                        let offset_x = (bearing_x - min_x_raw) / (width as f32 * 2.0);
 
+                        // TODO: This part is not correct
+                        let bearing_y_raw = (font_props.max_y * scaler) - max_y_raw;
+                        let bearing_y = bearing_y_raw.ceil();
+                        let offset_y = (bearing_y_raw - bearing_y) / (height as f32 * 2.0);
+
+                        // TODO: Is this even reachable?
                         if width == 0 || height == 0 {
                             cache.bitmaps.insert(
                                 (glyph_i, ord_text_height),
