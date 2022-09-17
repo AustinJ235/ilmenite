@@ -107,6 +107,13 @@ vec2 transform_coords(uint offset_i, vec2 offset) {
 	return coords;
 }
 
+float gain( float x, float k ) {
+  x = clamp(x, 0.0, 1.0);
+  float s = sign(x-0.5);
+  float o = (1.0+s)/2.0;
+  return o - 0.5*s*pow(2.0*(o-s*x),k);
+}
+
 float get_value(vec2 offset, float ray_len) {
 	float fill_amt = 0.0;
 	float fill_amt_sum = 0.0;
@@ -117,7 +124,13 @@ float get_value(vec2 offset, float ray_len) {
 		}
 	}
 	
-	return fill_amt_sum / float(com.sample_count);
+	float value = fill_amt_sum / float(com.sample_count);
+
+	if(value < 0.02) {
+		return 0.0;
+	} else {
+		return gain(value + 0.1, 2.5);
+	}
 }
 
 void main() {
@@ -127,10 +140,16 @@ void main() {
 	);
 	
 	uint rindex = ((gl_GlobalInvocationID.y * glyph.width) + gl_GlobalInvocationID.x) * 4;
+	float left = get_value(vec2(-1.0 / 6.0, 0.0), ray_len);
+	float r = get_value(vec2(1.0 / 6.0, 0.0), ray_len);
+	float g = get_value(vec2(3.0 / 6.0, 0.0), ray_len);
+	float b = get_value(vec2(5.0 / 6.0, 0.0), ray_len);
+	float right = get_value(vec2(7.0 / 6.0, 0.0), ray_len);
+
 	vec3 color = vec3(
-		get_value(vec2(1.0 / 6.0, 0.0), ray_len),
-		get_value(vec2(3.0 / 6.0, 0.0), ray_len),
-		get_value(vec2(5.0 / 6.0, 0.0), ray_len)
+		(left * (1.0 / 3.0)) + (r * (1.0 / 3.0)) + (g * (1.0 / 3.0)),
+		(r * (1.0 / 3.0)) + (g * (1.0 / 3.0)) + (b * (1.0 / 3.0)),
+		(g * (1.0 / 3.0)) + (b * (1.0 / 3.0)) + (right * (1.0 / 3.0))
 	);
 
 	float alpha = max(color.r, max(color.g, color.b));

@@ -33,6 +33,8 @@ pub enum ImtSSAA {
     X8,
     /// 256 samples
     X16,
+    /// 1024 samples
+    X32,
 }
 
 impl ImtSSAA {
@@ -43,6 +45,7 @@ impl ImtSSAA {
             Self::X4 => 4,
             Self::X8 => 8,
             Self::X16 => 16,
+            Self::X32 => 32,
         }
     }
 }

@@ -1,6 +1,3 @@
-// TODO: Remove This
-// #![allow(warnings)]
-
 use std::collections::HashMap;
 use std::iter;
 use std::sync::Arc;
@@ -529,8 +526,6 @@ impl ImtRaster for ImtRasterGpu {
                     },
                     Some(vert_buf) => {
                         let parsed = &shaped_glyphs[shaped_i].parsed;
-
-                        // Think this part is mostly correct
                         let min_x_raw = parsed.min_x * scaler;
                         let max_x_raw = parsed.max_x * scaler;
                         let min_y_raw = parsed.min_y * scaler;
@@ -541,15 +536,13 @@ impl ImtRaster for ImtRasterGpu {
                         let raw_height = max_y_raw - min_y_raw;
                         let scale_x = (raw_width * 2.0) / (width as f32 * 2.0);
                         let scale_y = (raw_height * 2.0) / (height as f32 * 2.0);
-                        let bearing_x = min_x_raw.floor();
-                        let offset_x = (bearing_x - min_x_raw) / (width as f32 * 2.0);
 
-                        // TODO: This part is not correct
-                        let bearing_y_raw = (font_props.max_y * scaler) - max_y_raw;
-                        let bearing_y = bearing_y_raw.ceil();
-                        let offset_y = (bearing_y_raw - bearing_y) / (height as f32 * 2.0);
+                        // TODO: Fix Maths
+                        let bearing_x = min_x_raw.floor() + (min_x_raw.floor() - min_x_raw);
+                        let bearing_y = (font_props.max_y * scaler) - max_y_raw - (max_y_raw.ceil() - max_y_raw);
+                        let offset_x = -((min_x_raw.floor() - min_x_raw) / (width as f32 * 2.0));
+                        let offset_y = (max_y_raw.ceil() - max_y_raw) / (height as f32 * 2.0);
 
-                        // TODO: Is this even reachable?
                         if width == 0 || height == 0 {
                             cache.bitmaps.insert(
                                 (glyph_i, ord_text_height),
