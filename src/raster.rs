@@ -170,7 +170,7 @@ impl ImtRaster {
             device.clone(),
             BufferUsage {
                 transfer_src: true,
-                ..BufferUsage::none()
+                ..BufferUsage::empty()
             },
             false,
             glyph_cs::ty::Common {
@@ -186,15 +186,15 @@ impl ImtRaster {
             BufferUsage {
                 transfer_dst: true,
                 uniform_buffer: true,
-                ..BufferUsage::none()
+                ..BufferUsage::empty()
             },
-            iter::once(queue.family()),
+            iter::once(queue.queue_family_index()),
         )
         .unwrap();
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
             device.clone(),
-            queue.family(),
+            queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
@@ -225,7 +225,7 @@ impl ImtRaster {
         )
         .unwrap();
 
-        let set_pool = SingleLayoutDescSetPool::new(pipeline.layout().set_layouts()[0].clone());
+        let set_pool = SingleLayoutDescSetPool::new(pipeline.layout().set_layouts()[0].clone()).unwrap();
         let raster_to_image = opts.raster_to_image;
         let raster_image_format = opts.raster_image_format;
 

@@ -262,7 +262,7 @@ impl ImtGlyphBitmap {
                 context.device.clone(),
                 BufferUsage {
                     uniform_buffer: true,
-                    ..BufferUsage::none()
+                    ..BufferUsage::empty()
                 },
                 false,
                 glyph_cs::ty::Glyph {
@@ -281,7 +281,7 @@ impl ImtGlyphBitmap {
             )
             .unwrap();
 
-        let bitmap_img = ImtImageView::new(
+        let bitmap_img = ImtImageView::from_storage(
             StorageImage::with_usage(
                 context.device.clone(),
                 ImageDimensions::Dim2d {
@@ -293,10 +293,10 @@ impl ImtGlyphBitmap {
                 ImageUsage {
                     transfer_src: true,
                     storage: true,
-                    ..ImageUsage::none()
+                    ..ImageUsage::empty()
                 },
-                ImageCreateFlags::none(),
-                iter::once(context.queue.family()),
+                ImageCreateFlags::empty(),
+                iter::once(context.queue.queue_family_index()),
             )
             .unwrap(),
         )
@@ -306,7 +306,7 @@ impl ImtGlyphBitmap {
             context.device.clone(),
             BufferUsage {
                 storage_buffer: true,
-                ..BufferUsage::none()
+                ..BufferUsage::empty()
             },
             false,
             self.lines
@@ -331,7 +331,7 @@ impl ImtGlyphBitmap {
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
             context.device.clone(),
-            context.queue.family(),
+            context.queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
@@ -365,7 +365,7 @@ impl ImtGlyphBitmap {
                     len,
                     BufferUsage {
                         transfer_dst: true,
-                        ..BufferUsage::none()
+                        ..BufferUsage::empty()
                     },
                     true,
                 )
@@ -374,7 +374,7 @@ impl ImtGlyphBitmap {
 
             let mut cmd_buf = AutoCommandBufferBuilder::primary(
                 context.device.clone(),
-                context.queue.family(),
+                context.queue.queue_family_index(),
                 CommandBufferUsage::OneTimeSubmit,
             )
             .unwrap();

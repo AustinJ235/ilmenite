@@ -5,7 +5,7 @@ authors = ["Austin <me@austinj.me>"]
 publish = false
 
 [dependencies]
-basalt = { path = "../../basalt" }
+basalt = "0.18"
 
 [patch.crates-io]
 ilmenite = { path = "../" }

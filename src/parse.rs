@@ -204,6 +204,10 @@ pub struct ImtFontProps {
     pub ascender: f32,
     pub descender: f32,
     pub line_gap: f32,
+    pub min_x: f32,
+    pub max_x: f32,
+    pub min_y: f32,
+    pub max_y: f32,
 }
 
 pub struct ImtParsedGlyph {
@@ -374,6 +378,10 @@ impl ImtParserNonSend {
                 + (head.units_per_em as f32 / 22.0).floor(),
             descender: hhea.descender as f32,
             line_gap,
+            min_x: head.x_min as f32,
+            max_x: head.x_max as f32,
+            min_y: head.y_min as f32,
+            max_y: head.y_max as f32,
         };
 
         Ok(ImtParserNonSend {

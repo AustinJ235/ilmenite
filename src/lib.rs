@@ -36,7 +36,7 @@ use crossbeam::sync::ShardedLock;
 pub use error::{ImtError, ImtErrorSrc, ImtErrorTy};
 pub(crate) use font::ImtFontKey;
 pub use font::{ImtFont, ImtWeight};
-pub use image_view::ImtImageView;
+pub use image_view::{ImtImageVarient, ImtImageView};
 pub use parse::{ImtFontProps, ImtParsedGlyph, ImtParser};
 pub use primative::{ImtGeometry, ImtPoint, ImtPosition};
 pub use raster::{ImtFillQuality, ImtRaster, ImtRasterOpts, ImtRasteredGlyph, ImtSampleQuality};
@@ -49,7 +49,7 @@ use vulkano::device::Features as VkFeatures;
 pub fn ilmenite_required_vk_features() -> VkFeatures {
     VkFeatures {
         shader_storage_image_write_without_format: true,
-        ..VkFeatures::none()
+        ..VkFeatures::empty()
     }
 }
 
