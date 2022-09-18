@@ -17,8 +17,8 @@ edition = "2021"
 vulkano = { path = "../vulkano/vulkano" }
 vulkano-shaders = { path = "../vulkano/vulkano-shaders" }
 ash = "0.37"
-allsorts = { version = "0.10.0", default-features = false, features = ["flate2_rust"] }
-ordered-float = "3.0.0"
-parking_lot = "0.12.1"
-crossbeam = "0.8.1"
-bytemuck = "1.7"
+allsorts = { version = "0.11.0", default-features = false, features = ["flate2_rust"] }
+ordered-float = "3"
+parking_lot = "0.12"
+crossbeam = "0.8"
+bytemuck = "1"
