@@ -25,7 +25,6 @@ pub mod image_view;
 pub mod parse;
 pub mod primative;
 pub mod raster;
-pub mod raster_v2;
 pub mod script;
 pub mod shaders;
 pub mod shape;
@@ -50,7 +49,7 @@ use vulkano::device::Features as VkFeatures;
 pub fn ilmenite_required_vk_features() -> VkFeatures {
     VkFeatures {
         shader_storage_image_write_without_format: true,
-        ..VkFeatures::none()
+        ..VkFeatures::empty()
     }
 }
 
