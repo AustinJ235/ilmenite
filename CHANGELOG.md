@@ -1,5 +1,20 @@
 # Unreleased
 
+# Version 0.10.0 (September 18th, 2022)
+
+- **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.31`.
+- **BREAKING** Update dependency `allsorts` to `0.11`.
+- **BREAKING** Changes to `ImtImageView`
+  - `new` has been renamed to `from_storage`.
+  - Added `from_attachment`.
+  - Added `image_view_ref` to retreive the inner image view.
+  - Fixed bug that caused needless image transitions.
+- **BREAKING** `ImtFontProps` now has four additional fields.
+  - `min_x`, `max_x`, `min_y`, `max_y` that are from the `head` header.
+- Changes to rasterization (GPU Only for Now)
+  - Gain curve is now applied to values resulting in clearer text.
+  - Subpixels now have a boxy filter applied similar to freetype's default lcd filter.
+
 # Version 0.10.0 (July 20th, 2022)
 
 - **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.30`.

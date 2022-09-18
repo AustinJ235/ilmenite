@@ -1,6 +1,6 @@
 [package]
 name = "ilmenite"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["Austin Johnson <me@austinj.me>"]
 repository = "https://github.com/AustinJ235/ilmenite"
 documentation = "https://docs.rs/ilmenite"
