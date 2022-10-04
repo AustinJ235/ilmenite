@@ -133,7 +133,7 @@ impl ImtParser {
         res.get().unwrap()
     }
 
-    pub fn retreive_text<T: AsRef<str>>(
+    pub fn retrieve_text<T: AsRef<str>>(
         &self,
         text: T,
         script: ImtScript,

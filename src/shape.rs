@@ -6,21 +6,21 @@ use crate::{
     ImtError, ImtErrorSrc, ImtErrorTy, ImtLang, ImtParsedGlyph, ImtParser, ImtPosition, ImtScript,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ImtVertAlign {
     Top,
     Bottom,
     Center,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ImtHoriAlign {
     Left,
     Right,
     Center,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ImtTextWrap {
     Shift,
     NewLine,

@@ -21,7 +21,7 @@ use vulkano::sync::GpuFuture;
 use crate::shaders::glyph_cs;
 use crate::{ImtError, ImtGlyphBitmap, ImtParser, ImtShapedGlyph};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ImtFillQuality {
     Fast,
     Normal,
@@ -38,7 +38,7 @@ impl ImtFillQuality {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ImtSampleQuality {
     Fastest,
     Faster,

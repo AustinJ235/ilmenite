@@ -1,5 +1,9 @@
 # Unreleased
 
+- **BREAKING** `ImtParser::retreive_text` has had its spelling correct to `ImtParser::retrieve_text`.
+- Added new method `has_font` to `Ilmenite` to query if a font has been loaded.
+- Various types now implement `Copy`: `ImtWeight`, `ImtFillQuality`, `ImtSampleQuality`, `ImtVertAlign`, `ImtHoriAlign`, & `ImtTextWrap`.
+
 # Version 0.10.0 (September 18th, 2022)
 
 - **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.31`.

@@ -82,6 +82,13 @@ impl Ilmenite {
         self.fonts.write().unwrap().insert(key, font);
     }
 
+    pub fn has_font<F: Into<String>>(&self, family: F, weight: ImtWeight) -> bool {
+        self.fonts.read().unwrap().contains_key(&ImtFontKey {
+            family: family.into(),
+            weight,
+        })
+    }
+
     pub fn glyphs_for_text<T: AsRef<str>>(
         &self,
         family: String,

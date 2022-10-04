@@ -10,7 +10,7 @@ use crate::{
     ImtScript, ImtShapeOpts, ImtShaper,
 };
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum ImtWeight {
     Thin,
     ExtraLight,
@@ -126,7 +126,7 @@ impl ImtFont {
         // TODO: Auto detect script/lang or require params to specify?
         let script = ImtScript::Default;
         let lang = ImtLang::Default;
-        let parsed_glyphs = self.parser.retreive_text(text, script, lang)?;
+        let parsed_glyphs = self.parser.retrieve_text(text, script, lang)?;
         let shaped_glyphs = self.shaper.shape_parsed_glyphs(
             &self.parser,
             script,
