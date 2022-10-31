@@ -8,12 +8,14 @@ use parking_lot::Mutex;
 use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
 use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano::buffer::BufferUsage;
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBuffer,
+    AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBufferAbstract,
 };
-use vulkano::descriptor_set::SingleLayoutDescSetPool;
+use vulkano::descriptor_set::SingleLayoutDescriptorSetPool;
 use vulkano::device::{Device, Queue};
 use vulkano::format::Format;
+use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::pipeline::{ComputePipeline, Pipeline};
 use vulkano::shader::ShaderModule;
 use vulkano::sync::GpuFuture;
@@ -123,10 +125,12 @@ pub struct ImtRaster {
 pub(crate) struct GpuRasterContext {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
+    pub mem_alloc: StandardMemoryAllocator,
+    pub cmd_alloc: StandardCommandBufferAllocator,
     pub glyph_cs: Arc<ShaderModule>,
     pub common_buf: Arc<DeviceLocalBuffer<glyph_cs::ty::Common>>,
     pub pipeline: Arc<ComputePipeline>,
-    pub set_pool: Mutex<SingleLayoutDescSetPool>,
+    pub set_pool: Mutex<SingleLayoutDescriptorSetPool>,
     pub raster_to_image: bool,
     pub raster_image_format: Format,
 }
@@ -144,6 +148,9 @@ impl ImtRaster {
     ) -> Result<Self, ImtError> {
         opts.cpu_rasterization = false;
         let glyph_cs = glyph_cs::load(device.clone()).unwrap();
+        let mem_alloc = StandardMemoryAllocator::new_default(device.clone());
+        let cmd_alloc = StandardCommandBufferAllocator::new(device.clone(), Default::default());
+
         let mut samples_and_rays = [[0.0; 4]; 25];
         let sample_count = opts.sample_count();
 
@@ -167,7 +174,7 @@ impl ImtRaster {
         }
 
         let common_cpu_buf = CpuAccessibleBuffer::from_data(
-            device.clone(),
+            &mem_alloc,
             BufferUsage {
                 transfer_src: true,
                 ..BufferUsage::empty()
@@ -182,7 +189,7 @@ impl ImtRaster {
         .unwrap();
 
         let common_dev_buf = DeviceLocalBuffer::new(
-            device.clone(),
+            &mem_alloc,
             BufferUsage {
                 transfer_dst: true,
                 uniform_buffer: true,
@@ -193,7 +200,7 @@ impl ImtRaster {
         .unwrap();
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
-            device.clone(),
+            &cmd_alloc,
             queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
@@ -225,7 +232,8 @@ impl ImtRaster {
         )
         .unwrap();
 
-        let set_pool = SingleLayoutDescSetPool::new(pipeline.layout().set_layouts()[0].clone()).unwrap();
+        let set_pool =
+            SingleLayoutDescriptorSetPool::new(pipeline.layout().set_layouts()[0].clone()).unwrap();
         let raster_to_image = opts.raster_to_image;
         let raster_image_format = opts.raster_image_format;
 
@@ -235,6 +243,8 @@ impl ImtRaster {
             gpu_raster_context: Some(GpuRasterContext {
                 device,
                 queue,
+                mem_alloc,
+                cmd_alloc,
                 glyph_cs,
                 common_buf: common_dev_buf,
                 pipeline,
