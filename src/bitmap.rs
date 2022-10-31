@@ -7,6 +7,7 @@ use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, CopyImageToBufferInfo,
     PrimaryCommandBufferAbstract,
 };
+use vulkano::descriptor_set::persistent::PersistentDescriptorSet;
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
 use vulkano::pipeline::{Pipeline, PipelineBindPoint};
@@ -316,19 +317,18 @@ impl ImtGlyphBitmap {
         )
         .unwrap();
 
-        let descriptor_set = context
-            .set_pool
-            .lock()
-            .next(
-                vec![
-                    WriteDescriptorSet::buffer(0, context.common_buf.clone()),
-                    WriteDescriptorSet::buffer(1, glyph_buf),
-                    WriteDescriptorSet::image_view(2, bitmap_img.clone()),
-                    WriteDescriptorSet::buffer(3, line_buf),
-                ]
-                .into_iter(),
-            )
-            .unwrap();
+        let descriptor_set = PersistentDescriptorSet::new(
+            &context.set_alloc,
+            context.pipeline.layout().set_layouts()[0].clone(),
+            vec![
+                WriteDescriptorSet::buffer(0, context.common_buf.clone()),
+                WriteDescriptorSet::buffer(1, glyph_buf),
+                WriteDescriptorSet::image_view(2, bitmap_img.clone()),
+                WriteDescriptorSet::buffer(3, line_buf),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
             &context.cmd_alloc,

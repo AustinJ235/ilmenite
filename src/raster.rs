@@ -12,11 +12,11 @@ use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBufferAbstract,
 };
-use vulkano::descriptor_set::SingleLayoutDescriptorSetPool;
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::{Device, Queue};
 use vulkano::format::Format;
 use vulkano::memory::allocator::StandardMemoryAllocator;
-use vulkano::pipeline::{ComputePipeline, Pipeline};
+use vulkano::pipeline::ComputePipeline;
 use vulkano::shader::ShaderModule;
 use vulkano::sync::GpuFuture;
 
@@ -130,7 +130,7 @@ pub(crate) struct GpuRasterContext {
     pub glyph_cs: Arc<ShaderModule>,
     pub common_buf: Arc<DeviceLocalBuffer<glyph_cs::ty::Common>>,
     pub pipeline: Arc<ComputePipeline>,
-    pub set_pool: Mutex<SingleLayoutDescriptorSetPool>,
+    pub set_alloc: StandardDescriptorSetAllocator,
     pub raster_to_image: bool,
     pub raster_image_format: Format,
 }
@@ -232,8 +232,7 @@ impl ImtRaster {
         )
         .unwrap();
 
-        let set_pool =
-            SingleLayoutDescriptorSetPool::new(pipeline.layout().set_layouts()[0].clone()).unwrap();
+        let set_alloc = StandardDescriptorSetAllocator::new(device.clone());
         let raster_to_image = opts.raster_to_image;
         let raster_image_format = opts.raster_image_format;
 
@@ -248,7 +247,7 @@ impl ImtRaster {
                 glyph_cs,
                 common_buf: common_dev_buf,
                 pipeline,
-                set_pool: Mutex::new(set_pool),
+                set_alloc,
                 raster_to_image,
                 raster_image_format,
             }),
