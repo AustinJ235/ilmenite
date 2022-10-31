@@ -4,8 +4,10 @@ use std::sync::Arc;
 use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
 use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, CopyImageToBufferInfo, PrimaryCommandBuffer,
+    AutoCommandBufferBuilder, CommandBufferUsage, CopyImageToBufferInfo,
+    PrimaryCommandBufferAbstract,
 };
+use vulkano::descriptor_set::persistent::PersistentDescriptorSet;
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
 use vulkano::pipeline::{Pipeline, PipelineBindPoint};
@@ -259,7 +261,7 @@ impl ImtGlyphBitmap {
 
         let glyph_buf: Arc<CpuAccessibleBuffer<glyph_cs::ty::Glyph>> =
             CpuAccessibleBuffer::from_data(
-                context.device.clone(),
+                &context.mem_alloc,
                 BufferUsage {
                     uniform_buffer: true,
                     ..BufferUsage::empty()
@@ -283,7 +285,7 @@ impl ImtGlyphBitmap {
 
         let bitmap_img = ImtImageView::from_storage(
             StorageImage::with_usage(
-                context.device.clone(),
+                &context.mem_alloc,
                 ImageDimensions::Dim2d {
                     width: self.metrics.width,
                     height: self.metrics.height,
@@ -303,7 +305,7 @@ impl ImtGlyphBitmap {
         .unwrap();
 
         let line_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
-            context.device.clone(),
+            &context.mem_alloc,
             BufferUsage {
                 storage_buffer: true,
                 ..BufferUsage::empty()
@@ -315,22 +317,21 @@ impl ImtGlyphBitmap {
         )
         .unwrap();
 
-        let descriptor_set = context
-            .set_pool
-            .lock()
-            .next(
-                vec![
-                    WriteDescriptorSet::buffer(0, context.common_buf.clone()),
-                    WriteDescriptorSet::buffer(1, glyph_buf),
-                    WriteDescriptorSet::image_view(2, bitmap_img.clone()),
-                    WriteDescriptorSet::buffer(3, line_buf),
-                ]
-                .into_iter(),
-            )
-            .unwrap();
+        let descriptor_set = PersistentDescriptorSet::new(
+            &context.set_alloc,
+            context.pipeline.layout().set_layouts()[0].clone(),
+            vec![
+                WriteDescriptorSet::buffer(0, context.common_buf.clone()),
+                WriteDescriptorSet::buffer(1, glyph_buf),
+                WriteDescriptorSet::image_view(2, bitmap_img.clone()),
+                WriteDescriptorSet::buffer(3, line_buf),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
 
         let mut cmd_buf = AutoCommandBufferBuilder::primary(
-            context.device.clone(),
+            &context.cmd_alloc,
             context.queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
@@ -361,7 +362,7 @@ impl ImtGlyphBitmap {
             let len = (self.metrics.width * self.metrics.height * 4) as u64;
             let bitmap_buf: Arc<CpuAccessibleBuffer<[u8]>> = unsafe {
                 CpuAccessibleBuffer::uninitialized_array(
-                    context.device.clone(),
+                    &context.mem_alloc,
                     len,
                     BufferUsage {
                         transfer_dst: true,
@@ -373,7 +374,7 @@ impl ImtGlyphBitmap {
             };
 
             let mut cmd_buf = AutoCommandBufferBuilder::primary(
-                context.device.clone(),
+                &context.cmd_alloc,
                 context.queue.queue_family_index(),
                 CommandBufferUsage::OneTimeSubmit,
             )

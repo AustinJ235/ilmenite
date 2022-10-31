@@ -1,10 +1,12 @@
 # Unreleased
 
+# Version 0.13.0 (October 31st, 2022)
+
 - **BREAKING** `ImtParser::retreive_text` has had its spelling correct to `ImtParser::retrieve_text`.
 - Added new method `has_font` to `Ilmenite` to query if a font has been loaded.
 - Various types now implement `Copy`: `ImtWeight`, `ImtFillQuality`, `ImtSampleQuality`, `ImtVertAlign`, `ImtHoriAlign`, & `ImtTextWrap`.
 
-# Version 0.10.0 (September 18th, 2022)
+# Version 0.12.0 (September 18th, 2022)
 
 - **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.31`.
 - **BREAKING** Update dependency `allsorts` to `0.11`.
@@ -19,7 +21,7 @@
   - Gain curve is now applied to values resulting in clearer text.
   - Subpixels now have a boxy filter applied similar to freetype's default lcd filter.
 
-# Version 0.10.0 (July 20th, 2022)
+# Version 0.11.0 (July 20th, 2022)
 
 - **BREAKING** Update dependency `vulkano` & `vulkano-shaders` to `0.30`.
 - Update dependency `ordered-float` to `3.0`.
