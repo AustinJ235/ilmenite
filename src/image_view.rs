@@ -137,7 +137,7 @@ unsafe impl ImageViewAbstract for ImtImageView {
     }
 
     #[inline]
-    fn format_features(&self) -> &FormatFeatures {
+    fn format_features(&self) -> FormatFeatures {
         self.image_view_ref().format_features()
     }
 
@@ -152,7 +152,7 @@ unsafe impl ImageViewAbstract for ImtImageView {
     }
 
     #[inline]
-    fn usage(&self) -> &ImageUsage {
+    fn usage(&self) -> ImageUsage {
         self.image_view_ref().usage()
     }
 

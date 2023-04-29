@@ -1,13 +1,11 @@
 use std::collections::BTreeMap;
-use std::iter;
 use std::sync::Arc;
 
 use crossbeam::sync::{Parker, Unparker};
 use ordered_float::OrderedFloat;
 use parking_lot::Mutex;
-use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
-use vulkano::buffer::device_local::DeviceLocalBuffer;
-use vulkano::buffer::BufferUsage;
+use vulkano::buffer::subbuffer::Subbuffer;
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBufferAbstract,
@@ -15,7 +13,7 @@ use vulkano::command_buffer::{
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::{Device, Queue};
 use vulkano::format::Format;
-use vulkano::memory::allocator::StandardMemoryAllocator;
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryUsage, StandardMemoryAllocator};
 use vulkano::pipeline::ComputePipeline;
 use vulkano::shader::ShaderModule;
 use vulkano::sync::GpuFuture;
@@ -128,7 +126,7 @@ pub(crate) struct GpuRasterContext {
     pub mem_alloc: StandardMemoryAllocator,
     pub cmd_alloc: StandardCommandBufferAllocator,
     pub glyph_cs: Arc<ShaderModule>,
-    pub common_buf: Arc<DeviceLocalBuffer<glyph_cs::ty::Common>>,
+    pub common_buf: Subbuffer<glyph_cs::Common>,
     pub pipeline: Arc<ComputePipeline>,
     pub set_alloc: StandardDescriptorSetAllocator,
     pub raster_to_image: bool,
@@ -173,14 +171,17 @@ impl ImtRaster {
             samples_and_rays[i][3] = rad.sin();
         }
 
-        let common_cpu_buf = CpuAccessibleBuffer::from_data(
+        let common_cpu_buf = Buffer::from_data(
             &mem_alloc,
-            BufferUsage {
-                transfer_src: true,
-                ..BufferUsage::empty()
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
             },
-            false,
-            glyph_cs::ty::Common {
+            AllocationCreateInfo {
+                usage: MemoryUsage::Upload,
+                ..Default::default()
+            },
+            glyph_cs::Common {
                 samples_and_rays,
                 sample_count: sample_count as u32,
                 ray_count: ray_count as u32,
@@ -188,14 +189,16 @@ impl ImtRaster {
         )
         .unwrap();
 
-        let common_dev_buf = DeviceLocalBuffer::new(
+        let common_dev_buf = Buffer::new_sized(
             &mem_alloc,
-            BufferUsage {
-                transfer_dst: true,
-                uniform_buffer: true,
-                ..BufferUsage::empty()
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_DST | BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
             },
-            iter::once(queue.queue_family_index()),
+            AllocationCreateInfo {
+                usage: MemoryUsage::DeviceOnly,
+                ..Default::default()
+            },
         )
         .unwrap();
 

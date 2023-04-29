@@ -1,8 +1,8 @@
 use std::iter;
 use std::sync::Arc;
 
-use vulkano::buffer::cpu_access::CpuAccessibleBuffer;
-use vulkano::buffer::BufferUsage;
+use vulkano::buffer::subbuffer::Subbuffer;
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::{
     AutoCommandBufferBuilder, CommandBufferUsage, CopyImageToBufferInfo,
     PrimaryCommandBufferAbstract,
@@ -10,6 +10,7 @@ use vulkano::command_buffer::{
 use vulkano::descriptor_set::persistent::PersistentDescriptorSet;
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::image::{ImageCreateFlags, ImageDimensions, ImageUsage, StorageImage};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryUsage};
 use vulkano::pipeline::{Pipeline, PipelineBindPoint};
 use vulkano::sync::GpuFuture;
 
@@ -259,29 +260,31 @@ impl ImtGlyphBitmap {
             return Ok(());
         }
 
-        let glyph_buf: Arc<CpuAccessibleBuffer<glyph_cs::ty::Glyph>> =
-            CpuAccessibleBuffer::from_data(
-                &context.mem_alloc,
-                BufferUsage {
-                    uniform_buffer: true,
-                    ..BufferUsage::empty()
-                },
-                false,
-                glyph_cs::ty::Glyph {
-                    scaler: self.scaler,
-                    width: self.metrics.width,
-                    height: self.metrics.height,
-                    line_count: self.lines.len() as u32,
-                    bounds: [
-                        self.parsed.min_x,
-                        self.parsed.max_x,
-                        self.parsed.min_y,
-                        self.parsed.max_y,
-                    ],
-                    offset: [self.offset_x, self.offset_y],
-                },
-            )
-            .unwrap();
+        let glyph_buf: Subbuffer<glyph_cs::Glyph> = Buffer::from_data(
+            &context.mem_alloc,
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                usage: MemoryUsage::Upload,
+                ..Default::default()
+            },
+            glyph_cs::Glyph {
+                scaler: self.scaler,
+                width: self.metrics.width,
+                height: self.metrics.height,
+                line_count: self.lines.len() as u32,
+                bounds: [
+                    self.parsed.min_x,
+                    self.parsed.max_x,
+                    self.parsed.min_y,
+                    self.parsed.max_y,
+                ],
+                offset: [self.offset_x, self.offset_y],
+            },
+        )
+        .unwrap();
 
         let bitmap_img = ImtImageView::from_storage(
             StorageImage::with_usage(
@@ -292,11 +295,7 @@ impl ImtGlyphBitmap {
                     array_layers: 1,
                 },
                 context.raster_image_format,
-                ImageUsage {
-                    transfer_src: true,
-                    storage: true,
-                    ..ImageUsage::empty()
-                },
+                ImageUsage::TRANSFER_SRC | ImageUsage::STORAGE,
                 ImageCreateFlags::empty(),
                 iter::once(context.queue.queue_family_index()),
             )
@@ -304,13 +303,16 @@ impl ImtGlyphBitmap {
         )
         .unwrap();
 
-        let line_buf: Arc<CpuAccessibleBuffer<[[f32; 4]]>> = CpuAccessibleBuffer::from_iter(
+        let line_buf: Subbuffer<[[f32; 4]]> = Buffer::from_iter(
             &context.mem_alloc,
-            BufferUsage {
-                storage_buffer: true,
-                ..BufferUsage::empty()
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
             },
-            false,
+            AllocationCreateInfo {
+                usage: MemoryUsage::Upload,
+                ..Default::default()
+            },
             self.lines
                 .iter()
                 .map(|line| [line.0.x, line.0.y, line.1.x, line.1.y]),
@@ -360,18 +362,20 @@ impl ImtGlyphBitmap {
 
         if !context.raster_to_image {
             let len = (self.metrics.width * self.metrics.height * 4) as u64;
-            let bitmap_buf: Arc<CpuAccessibleBuffer<[u8]>> = unsafe {
-                CpuAccessibleBuffer::uninitialized_array(
-                    &context.mem_alloc,
-                    len,
-                    BufferUsage {
-                        transfer_dst: true,
-                        ..BufferUsage::empty()
-                    },
-                    true,
-                )
-                .unwrap()
-            };
+
+            let bitmap_buf: Subbuffer<[u8]> = Buffer::new_unsized(
+                &context.mem_alloc,
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_DST,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    usage: MemoryUsage::Download,
+                    ..Default::default()
+                },
+                len,
+            )
+            .unwrap();
 
             let mut cmd_buf = AutoCommandBufferBuilder::primary(
                 &context.cmd_alloc,
